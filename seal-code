@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>Калькулятор кода печати</title>
+<style>
+body { font-family: sans-serif; max-width: 600px; margin: auto; padding: 20px; }
+select, button { font-size: 1em; margin: 5px 0; padding: 5px; }
+.result { margin-top: 15px; font-weight: bold; font-size: 1.2em; }
+</style>
+</head>
+<body>
+<h2>Калькулятор числового кода печати</h2>
+
+<label>Количество тэттраглифов:</label>
+<input type="number" id="glyphCount" min="1" max="21" value="3" onchange="renderGlyphSelectors()">
+
+<div id="selectors"></div>
+<button onclick="calculateCode()">Рассчитать код</button>
+
+<div class="result" id="result"></div>
+
+<script>
+const glyphs = [
+  ["Эль Аталар", 1], ["Эль Ви-Шах", 2], ["Эль Нере-Ар", 3], ["Эль Ви-Нар", 4],
+  ["Эль Эн-Инь-О", 5], ["Эль Ра-Дам", 6], ["Эль Муд-Рам", 7], ["Эль Мун-Ио", 8],
+  ["Эль Мар-Кам", 9], ["Эль Рэ-Тан", 10], ["Эль Ке-Тар", 11], ["Эль Ок-Улос", 12],
+  ["Эль Мана-Рат", 13], ["Эль Хот-Та", 14], ["Эль Ле-Дар", 15], ["Эль Аму", 16],
+  ["Эль Прай-Я", 17], ["Эль Кар", 18], ["Эль Ошта-Лар", 19], ["Эль Су-Ни-Я", 20],
+  ["Эль Ра", 21]
+];
+
+function renderGlyphSelectors(){
+  const count = document.getElementById("glyphCount").value;
+  const container = document.getElementById("selectors");
+  container.innerHTML = "";
+  for (let i=0; i<count; i++){
+    const sel = document.createElement("select");
+    glyphs.forEach(([name, code])=>{
+      const opt = document.createElement("option");
+      opt.value = code;
+      opt.textContent = `${name} (${code})`;
+      sel.appendChild(opt);
+    });
+    container.appendChild(sel);
+    container.appendChild(document.createElement("br"));
+  }
+}
+
+function reduceCode(sum){
+  while(sum > 10){
+    sum = sum.toString().split("").reduce((a,b)=>a+ +b, 0);
+  }
+  if(sum === 1) sum = 10;
+  return sum;
+}
+
+function calculateCode(){
+  const selects = document.querySelectorAll("#selectors select");
+  let total = 0;
+  selects.forEach(sel => total += parseInt(sel.value));
+  const finalCode = reduceCode(total);
+  document.getElementById("result").textContent = `Финальный числовой код: ${finalCode}`;
+}
+
+renderGlyphSelectors();
+</script>
+</body>
+</html>
