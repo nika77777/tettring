@@ -2,20 +2,18 @@
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
-<title>Калькулятор кода и имени печати</title>
+<title>Калькулятор числового кода и имени печати</title>
 <style>
   body { font-family: sans-serif; max-width: 760px; margin: auto; padding: 20px; }
   select, button, input { font-size: 1em; margin: 6px 0; padding: 6px; }
-  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .label { font-weight: 600; margin-top: 12px; }
   .result { margin-top: 16px; font-weight: 600; font-size: 1.15em; }
   .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
-  .muted { color: #555; }
-  .section { margin-top: 18px; }
-  .label { font-weight: 600; }
+  .muted { color: #555; font-size: 0.95em; }
 </style>
 </head>
 <body>
-<h2>Калькулятор числового кода печати</h2>
+<h2>Калькулятор числового кода и имени печати</h2>
 
 <label for="glyphCount">Количество тэттраглифов:</label>
 <input type="number" id="glyphCount" min="1" max="21" value="3" onchange="renderGlyphSelectors()">
@@ -23,24 +21,19 @@
 <div id="selectors"></div>
 <button onclick="calculateAll()">Рассчитать код и имя</button>
 
-<div class="section">
-  <div class="result" id="codeOut"></div>
-  <div id="nameOut" class="result"></div>
-</div>
+<div class="result" id="codeOut"></div>
+<div class="result" id="nameOut"></div>
 
-<div class="section">
-  <div class="label">Исходная строка слогов (по выбранным глифам):</div>
-  <div id="srcSyllables" class="mono"></div>
-</div>
+<div class="label">Исходная строка слогов:</div>
+<div class="muted">Последовательность всех слогов выбранных тэттраглифов.</div>
+<div id="srcSyllables" class="mono"></div>
 
-<div class="section">
-  <div class="label">Рабочая строка для выбора каждых n‑х слогов:</div>
-  <div id="workSyllables" class="mono"></div>
-  <div class="muted" id="pickInfo"></div>
-</div>
+<div class="label">Рабочая строка для выбора каждых n-х слогов:</div>
+<div class="muted" id="workDesc"></div>
+<div id="workSyllables" class="mono"></div>
+<div class="muted" id="pickInfo"></div>
 
 <script>
-/* 21 тэттраглиф: имя, код, слоги (в порядке из документа) */
 const glyphs = [
   ["Эль Аталар", 1, ["Ата","Лар"]],
   ["Эль Ви-Шах", 2, ["Ви","Шах"]],
@@ -65,123 +58,82 @@ const glyphs = [
   ["Эль Ра", 21, ["Эль","Ра"]],
 ];
 
-function renderGlyphSelectors() {
+function renderGlyphSelectors(){
   const count = parseInt(document.getElementById("glyphCount").value, 10);
   const container = document.getElementById("selectors");
-  // сохранить предыдущие выборы
   const prev = Array.from(container.querySelectorAll("select")).map(s => s.value);
-
   container.innerHTML = "";
-  for (let i = 0; i < count; i++) {
-    const wrapper = document.createElement("div");
+  for (let i = 0; i < count; i++){
     const label = document.createElement("div");
     label.textContent = `Врата №${i+1}`;
     label.className = "label";
     const sel = document.createElement("select");
     sel.id = `gate-${i+1}`;
-
     const placeholder = document.createElement("option");
     placeholder.value = "";
     placeholder.textContent = "— выберите тэттраглиф —";
     placeholder.disabled = true; placeholder.selected = true;
     sel.appendChild(placeholder);
-
-    glyphs.forEach(([name, code]) => {
+    glyphs.forEach(([name, code])=>{
       const opt = document.createElement("option");
-      opt.value = code; // код — здесь наш ID
+      opt.value = code;
       opt.textContent = `${name} (${code})`;
       sel.appendChild(opt);
     });
-
     if (prev[i]) sel.value = prev[i];
-    wrapper.appendChild(label);
-    wrapper.appendChild(sel);
-    container.appendChild(wrapper);
+    container.appendChild(label);
+    container.appendChild(sel);
   }
 }
 
 function reduceCode(sum){
-  while (sum > 10) {
-    sum = sum.toString().split("").reduce((a,b)=>a + Number(b), 0);
-  }
-  if (sum === 1) sum = 10;
+  while(sum > 10) sum = sum.toString().split("").reduce((a,b)=>a + Number(b), 0);
+  if(sum === 1) sum = 10;
   return sum;
 }
 
-/* вспомогательное: получить слоги по выбранным глифам в исходном порядке */
-function getSourceSyllables(selectedCodes){
+function getSourceSyllables(codes){
   const byCode = new Map(glyphs.map(([name, code, syll]) => [code, syll]));
   const seq = [];
-  selectedCodes.forEach(c => {
-    const s = byCode.get(c);
-    if (s) seq.push(...s);
-  });
-  return seq; // массив слогов строками
+  codes.forEach(c => { const s = byCode.get(c); if (s) seq.push(...s); });
+  return seq;
 }
 
-/* выбор каждых n‑х слогов по правилам (учитываем правило №5) */
 function pickEveryNthSyllable(n, srcSyllables){
   const picked = [];
-  let work = srcSyllables.slice();     // рабочая строка (массив слогов)
-  let lastIndexUsed = 0;               // до какого индекса реально дошли
-
-  // будем брать n, 2n, 3n ... пока либо выбрано n слогов,
-  // либо (по правилу №5) набрано >=2 слогов — тогда останавливаемся
+  let work = srcSyllables.slice();
+  let extended = false;
   let k = 1;
   while (true) {
-    const needIndex = n * k; // 1*n, 2*n, 3*n ...
-    // если рабочая строка короче — удваиваем, как в правилах
+    const needIndex = n * k;
     while (work.length < needIndex) {
-      work = work.concat(srcSyllables);
+      work = work.concat(srcSyllables); // полное удвоение
+      extended = true;
     }
-    // выбираем нужный слог (индексация 1-базная)
-    const syll = work[needIndex - 1];
-    picked.push(syll);
-    lastIndexUsed = needIndex;
-
-    // условие остановки: либо уже набрали n слогов, либо >=2 — по правилу №5
+    picked.push(work[needIndex - 1]);
     if (picked.length >= n || picked.length >= 2) break;
     k++;
   }
-  return { picked, workUsed: work.slice(0, lastIndexUsed) };
+  return { picked, work, extended };
 }
 
-/* пост-обработка дубликатов по правилам документа */
 function postprocessName(picked){
   const L = picked.length;
   if (L === 0) return picked;
-
-  // если ровно 2 одинаковых — ничего не удаляем
   if (L === 2 && picked[0] === picked[1]) return picked;
-
-  // если ровно 3 и есть повторяющийся слог
   if (L === 3) {
-    if (picked[0] === picked[1] && picked[1] !== picked[2]) {
-      // переставим: A A B -> A B A
-      return [picked[0], picked[2], picked[1]];
-    }
-    if (picked[1] === picked[2] && picked[0] !== picked[1]) {
-      // A B B -> B A B
-      return [picked[1], picked[0], picked[2]];
-    }
-    // если все три одинаковые — оставляем как есть (частный случай)
+    if (picked[0] === picked[1] && picked[1] !== picked[2]) return [picked[0], picked[2], picked[1]];
+    if (picked[1] === picked[2] && picked[0] !== picked[1]) return [picked[1], picked[0], picked[2]];
     return picked;
   }
-
-  // Общее правило: если есть ≥2 уникальных — убрать дубликаты, сохраняя порядок
   const seen = new Set();
   const unique = [];
-  picked.forEach(s => {
-    if (!seen.has(s)) { seen.add(s); unique.push(s); }
-  });
+  picked.forEach(s => { if (!seen.has(s)) { seen.add(s); unique.push(s); } });
   if (unique.length >= 2) return unique;
-
-  // иначе (останется <2) — откатываем удаление, возвращаем исходное
   return picked;
 }
 
 function calculateAll(){
-  // собрать выбранные коды
   const selects = document.querySelectorAll("#selectors select");
   const codes = [];
   for (const sel of selects) {
@@ -191,40 +143,28 @@ function calculateAll(){
       document.getElementById("nameOut").textContent = "";
       document.getElementById("srcSyllables").textContent = "";
       document.getElementById("workSyllables").textContent = "";
+      document.getElementById("workDesc").textContent = "";
       document.getElementById("pickInfo").textContent = "Пожалуйста, выберите тэттраглиф для всех врат.";
       return;
     }
     codes.push(v);
   }
-
-  // числовой код
   const sum = codes.reduce((a,b)=>a+b, 0);
   const n = reduceCode(sum);
-
-  // исходная строка слогов
   const src = getSourceSyllables(codes);
   document.getElementById("srcSyllables").textContent = src.map((s,i)=>`${i+1}.${s}`).join("  ");
-
-  // выбор каждых n‑х слогов (с удлинением строки и правилом №5)
-  const { picked, workUsed } = pickEveryNthSyllable(n, src);
-
-  // пост-обработка имени
+  const { picked, work, extended } = pickEveryNthSyllable(n, src);
   const finalNameParts = postprocessName(picked);
-
-  // выводы
   document.getElementById("codeOut").textContent = `Финальный числовой код: ${n}`;
-  document.getElementById("workSyllables").textContent = workUsed.map((s,i)=>`${i+1}.${s}`).join("  ");
-
-  // инфо о позициях выбора
+  document.getElementById("workSyllables").textContent = work.map((s,i)=>`${i+1}.${s}`).join("  ");
+  document.getElementById("workDesc").textContent = extended
+    ? "Рабочая строка (удлинена полным повтором исходной строки для выбора как минимум двух слогов)"
+    : "Рабочая строка (удлинение не потребовалось)";
   const positions = [];
   for (let k = 1; k <= picked.length; k++) positions.push(n*k);
   document.getElementById("pickInfo").textContent =
-    `Выбранные позиции: ${positions.join(", ")} (каждый ${n}-й слог). ` +
-    (picked.length >= 2 ? "Остановлено по правилу № 5 (≥ 2 слога)." : "");
-
-  // имя печати
-  const nameText = finalNameParts.join(" ");
-  document.getElementById("nameOut").textContent = `Имя печати: ${nameText || "—"}`;
+    `Выбранные позиции: ${positions.join(", ")} (каждый ${n}-й слог). Выбор слогов завершён: набрано два или более слогов, как предусмотрено в правилах формирования имени печати.`;
+  document.getElementById("nameOut").textContent = `Имя печати: ${finalNameParts.join(" ") || "—"}`;
 }
 
 renderGlyphSelectors();
