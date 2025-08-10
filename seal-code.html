@@ -4,15 +4,15 @@
 <meta charset="UTF-8">
 <title>Калькулятор кода печати</title>
 <style>
-body { font-family: sans-serif; max-width: 600px; margin: auto; padding: 20px; }
-select, button { font-size: 1em; margin: 5px 0; padding: 5px; }
-.result { margin-top: 15px; font-weight: bold; font-size: 1.2em; }
+  body { font-family: sans-serif; max-width: 600px; margin: auto; padding: 20px; }
+  select, button, input { font-size: 1em; margin: 6px 0; padding: 6px; }
+  .result { margin-top: 15px; font-weight: bold; font-size: 1.2em; }
 </style>
 </head>
 <body>
 <h2>Калькулятор числового кода печати</h2>
 
-<label>Количество тэттраглифов:</label>
+<label for="glyphCount">Количество тэттраглифов:</label>
 <input type="number" id="glyphCount" min="1" max="21" value="3" onchange="renderGlyphSelectors()">
 
 <div id="selectors"></div>
@@ -30,37 +30,68 @@ const glyphs = [
   ["Эль Ра", 21]
 ];
 
-function renderGlyphSelectors(){
-  const count = document.getElementById("glyphCount").value;
+function renderGlyphSelectors() {
+  const count = parseInt(document.getElementById("glyphCount").value, 10);
   const container = document.getElementById("selectors");
+
+  // сохраняем предыдущие выборы при смене количества
+  const prev = Array.from(container.querySelectorAll("select")).map(s => s.value);
+
   container.innerHTML = "";
-  for (let i=0; i<count; i++){
+  for (let i = 0; i < count; i++) {
     const sel = document.createElement("select");
-    glyphs.forEach(([name, code])=>{
+    sel.id = `gate-${i+1}`;
+
+    // Плейсхолдер "Врата №X"
+    const placeholder = document.createElement("option");
+    placeholder.value = "";
+    placeholder.textContent = `— Врата №${i+1}: выберите тэттраглиф —`;
+    placeholder.disabled = true;
+    placeholder.selected = true;
+    sel.appendChild(placeholder);
+
+    // Список из 21 тэттраглифа
+    glyphs.forEach(([name, code]) => {
       const opt = document.createElement("option");
       opt.value = code;
       opt.textContent = `${name} (${code})`;
       sel.appendChild(opt);
     });
+
+    // вернуть прошлый выбор, если он был
+    if (prev[i]) sel.value = prev[i];
+
     container.appendChild(sel);
     container.appendChild(document.createElement("br"));
   }
 }
 
-function reduceCode(sum){
-  while(sum > 10){
-    sum = sum.toString().split("").reduce((a,b)=>a+ +b, 0);
+function reduceCode(sum) {
+  while (sum > 10) {
+    sum = sum.toString().split("").reduce((a, b) => a + +b, 0);
   }
-  if(sum === 1) sum = 10;
+  if (sum === 1) sum = 10;
   return sum;
 }
 
-function calculateCode(){
+function calculateCode() {
   const selects = document.querySelectorAll("#selectors select");
   let total = 0;
-  selects.forEach(sel => total += parseInt(sel.value));
+  let missing = false;
+
+  selects.forEach(sel => {
+    const val = parseInt(sel.value, 10);
+    if (isNaN(val)) missing = true; else total += val;
+  });
+
+  const out = document.getElementById("result");
+  if (missing) {
+    out.textContent = "Пожалуйста, выберите тэттраглиф для всех врат.";
+    return;
+  }
+
   const finalCode = reduceCode(total);
-  document.getElementById("result").textContent = `Финальный числовой код: ${finalCode}`;
+  out.textContent = `Финальный числовой код: ${finalCode}`;
 }
 
 renderGlyphSelectors();
