@@ -8,8 +8,12 @@
   select, button, input { font-size: 1em; margin: 6px 0; padding: 6px; }
   .label { font-weight: 600; margin-top: 12px; }
   .result { margin-top: 16px; font-weight: 600; font-size: 1.15em; }
-  .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; line-height: 1.7; }
   .muted { color: #555; font-size: 0.95em; }
+  /* Подсветка выбранных позиций n, 2n, 3n... */
+  .pick { font-weight: 700; background: #fff3c4; border-radius: 4px; padding: 1px 4px; }
+  /* Нумерация: "1.Слог" оформим чуть мягче */
+  .syll { display: inline-block; margin-right: 10px; }
 </style>
 </head>
 <body>
@@ -25,10 +29,10 @@
 <div class="result" id="nameOut"></div>
 
 <div class="label">Исходная строка слогов:</div>
-<div class="muted">Последовательность всех слогов выбранных тэттраглифов.</div>
+<div class="muted">Последовательность всех слогов выбранных тэттраглифов (в исходном порядке).</div>
 <div id="srcSyllables" class="mono"></div>
 
-<div class="label">Рабочая строка для выбора каждых n-х слогов:</div>
+<div class="label">Рабочая строка для выбора каждых n‑х слогов:</div>
 <div class="muted" id="workDesc"></div>
 <div id="workSyllables" class="mono"></div>
 <div class="muted" id="pickInfo"></div>
@@ -47,7 +51,7 @@ const glyphs = [
   ["Эль Рэ-Тан", 10, ["Рэ","Тан"]],
   ["Эль Ке-Тар", 11, ["Ке","Тар"]],
   ["Эль Ок-Улос", 12, ["Ок","Улос"]],
-  ["Эль Мана-Рат", 13, ["Ма","На","Рат"]],
+  ["Эль Мана-Рат", 13, ["Мана","Рат"]],
   ["Эль Хот-Та", 14, ["Хот","Та"]],
   ["Эль Ле-Дар", 15, ["Ле","Дар"]],
   ["Эль Аму", 16, ["Эль","Аму"]],
@@ -87,8 +91,8 @@ function renderGlyphSelectors(){
 }
 
 function reduceCode(sum){
-  while(sum > 10) sum = sum.toString().split("").reduce((a,b)=>a + Number(b), 0);
-  if(sum === 1) sum = 10;
+  while (sum > 10) sum = sum.toString().split("").reduce((a,b)=>a + Number(b), 0);
+  if (sum === 1) sum = 10;
   return sum;
 }
 
@@ -99,22 +103,35 @@ function getSourceSyllables(codes){
   return seq;
 }
 
-function pickEveryNthSyllable(n, srcSyllables){
-  const picked = [];
-  let work = srcSyllables.slice();
+/* Логика:
+   — Если исходной длины L хватает для >=2 попаданий (floor(L/n) >= 2), не удлиняем.
+   — Иначе один раз удваиваем: work = src + src. Выбираем по всей удвоенной длине.
+   — Всегда берём позиции n, 2n, 3n... пока <= длины рабочей строки, но не больше n слогов. */
+function pickEveryNthSyllable_New(n, src){
+  const L = src.length;
+  const enoughForTwo = Math.floor(L / n) >= 2;
+  let work = src.slice();
   let extended = false;
-  let k = 1;
-  while (true) {
-    const needIndex = n * k;
-    while (work.length < needIndex) {
-      work = work.concat(srcSyllables); // полное удвоение
-      extended = true;
-    }
-    picked.push(work[needIndex - 1]);
-    if (picked.length >= n || picked.length >= 2) break;
-    k++;
+
+  if (!enoughForTwo) {
+    work = src.concat(src);   // строго полное удвоение
+    extended = true;
   }
-  return { picked, work, extended };
+
+  const maxIndex = work.length;
+  const picked = [];
+  const positions = [];
+
+  for (let k = 1; k <= n; k++) {
+    const pos = n * k;
+    if (pos <= maxIndex) {
+      picked.push(work[pos - 1]);
+      positions.push(pos);
+    } else {
+      break;
+    }
+  }
+  return { picked, positions, work, extended };
 }
 
 function postprocessName(picked){
@@ -133,6 +150,17 @@ function postprocessName(picked){
   return picked;
 }
 
+/* Вспомогательное: печать слогов с нумерацией + подсветкой выбранных позиций */
+function renderSyllableLine(containerId, syllables, pickedPositions){
+  const el = document.getElementById(containerId);
+  const html = syllables.map((s, i) => {
+    const idx = i + 1;
+    const cls = pickedPositions.includes(idx) ? 'syll pick' : 'syll';
+    return `<span class="${cls}">${idx}.${s}</span>`;
+  }).join("  ");
+  el.innerHTML = html;
+}
+
 function calculateAll(){
   const selects = document.querySelectorAll("#selectors select");
   const codes = [];
@@ -141,29 +169,45 @@ function calculateAll(){
     if (isNaN(v)) {
       document.getElementById("codeOut").textContent = "";
       document.getElementById("nameOut").textContent = "";
-      document.getElementById("srcSyllables").textContent = "";
-      document.getElementById("workSyllables").textContent = "";
+      document.getElementById("srcSyllables").innerHTML = "";
+      document.getElementById("workSyllables").innerHTML = "";
       document.getElementById("workDesc").textContent = "";
       document.getElementById("pickInfo").textContent = "Пожалуйста, выберите тэттраглиф для всех врат.";
       return;
     }
     codes.push(v);
   }
+
+  // 1) Финальный числовой код
   const sum = codes.reduce((a,b)=>a+b, 0);
   const n = reduceCode(sum);
+
+  // 2) Исходная строка
   const src = getSourceSyllables(codes);
-  document.getElementById("srcSyllables").textContent = src.map((s,i)=>`${i+1}.${s}`).join("  ");
-  const { picked, work, extended } = pickEveryNthSyllable(n, src);
+  renderSyllableLine("srcSyllables", src, []); // без подсветки
+
+  // 3) Выбор по новой логике
+  const { picked, positions, work, extended } = pickEveryNthSyllable_New(n, src);
+
+  // 4) Пост-обработка имени
   const finalNameParts = postprocessName(picked);
+
+  // 5) Выводы
   document.getElementById("codeOut").textContent = `Финальный числовой код: ${n}`;
-  document.getElementById("workSyllables").textContent = work.map((s,i)=>`${i+1}.${s}`).join("  ");
   document.getElementById("workDesc").textContent = extended
     ? "Рабочая строка (удлинена полным повтором исходной строки для выбора как минимум двух слогов)"
     : "Рабочая строка (удлинение не потребовалось)";
-  const positions = [];
-  for (let k = 1; k <= picked.length; k++) positions.push(n*k);
-  document.getElementById("pickInfo").textContent =
-    `Выбранные позиции: ${positions.join(", ")} (каждый ${n}-й слог). Выбор слогов завершён: набрано два или более слогов, как предусмотрено в правилах формирования имени печати.`;
+
+  renderSyllableLine("workSyllables", work, positions);
+
+  let info = positions.length
+    ? `Выбранные позиции: ${positions.join(", ")} (каждый ${n}-й слог). `
+    : `Нет доступных позиций, кратных ${n}, в рабочей строке. `;
+  if (positions.length >= 2) {
+    info += "Выбор слогов завершён: набрано два или более слогов, как предусмотрено в правилах формирования имени печати.";
+  }
+  document.getElementById("pickInfo").textContent = info;
+
   document.getElementById("nameOut").textContent = `Имя печати: ${finalNameParts.join(" ") || "—"}`;
 }
 
