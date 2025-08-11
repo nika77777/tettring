@@ -10,10 +10,20 @@
   .result { margin-top: 16px; font-weight: 600; font-size: 1.15em; }
   .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; line-height: 1.7; }
   .muted { color: #555; font-size: 0.95em; }
-  /* Подсветка выбранных позиций n, 2n, 3n... */
-  .pick { font-weight: 700; background: #fff3c4; border-radius: 4px; padding: 1px 4px; }
-  /* Нумерация: "1.Слог" оформим чуть мягче */
   .syll { display: inline-block; margin-right: 10px; }
+  .pick { font-weight: 700; background: #fff3c4; border-radius: 4px; padding: 1px 4px; }
+
+  /* Карточки тэттрачастиц */
+  .particles-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 14px; margin-top: 10px;
+  }
+  .card { border: 1px solid #eee; border-radius: 10px; padding: 10px; background: #fff; }
+  .card img { width: 100%; height: auto; border-radius: 8px; display: block; }
+  .card .title { font-weight: 700; margin-top: 8px; }
+  .card .desc { color: #444; font-size: 0.95em; margin-top: 6px; white-space: pre-line; }
+  .card .note { color: #777; font-size: 0.9em; margin-top: 6px; }
+  .error { color: #b00020; }
 </style>
 </head>
 <body>
@@ -37,7 +47,27 @@
 <div id="workSyllables" class="mono"></div>
 <div class="muted" id="pickInfo"></div>
 
+<div class="label">Тэттрачастицы имени:</div>
+<div class="muted">Каждый слог имени соответствует тэттрачастице. Ниже — изображение и расшифровка для каждого слога.</div>
+<div id="particlesOut" class="particles-grid"></div>
+<div id="particlesErr" class="muted error"></div>
+
 <script>
+/* Подтягиваем словарь тэттрачастиц из particles.json */
+let particlesMap = {};
+fetch("particles.json")
+  .then(r => {
+    if (!r.ok) throw new Error("particles.json not found");
+    return r.json();
+  })
+  .then(data => { particlesMap = data; })
+  .catch(err => {
+    document.getElementById("particlesErr").textContent =
+      "Не удалось загрузить particles.json. Проверьте, что файл лежит рядом со страницей и содержит корректный JSON.";
+    particlesMap = {};
+  });
+
+/* 21 тэттраглиф: имя, код, слоги (исправлено: Эль Мана‑Рат = «Мана», «Рат») */
 const glyphs = [
   ["Эль Аталар", 1, ["Ата","Лар"]],
   ["Эль Ви-Шах", 2, ["Ви","Шах"]],
@@ -51,7 +81,7 @@ const glyphs = [
   ["Эль Рэ-Тан", 10, ["Рэ","Тан"]],
   ["Эль Ке-Тар", 11, ["Ке","Тар"]],
   ["Эль Ок-Улос", 12, ["Ок","Улос"]],
-  ["Эль Мана-Рат", 13, ["Мана","Рат"]],
+  ["Эль Мана-Рат", 13, ["Мана","Рат"]],  // исправлено
   ["Эль Хот-Та", 14, ["Хот","Та"]],
   ["Эль Ле-Дар", 15, ["Ле","Дар"]],
   ["Эль Аму", 16, ["Эль","Аму"]],
@@ -103,11 +133,11 @@ function getSourceSyllables(codes){
   return seq;
 }
 
-/* Логика:
+/* Логика выбора:
    — Если исходной длины L хватает для >=2 попаданий (floor(L/n) >= 2), не удлиняем.
    — Иначе один раз удваиваем: work = src + src. Выбираем по всей удвоенной длине.
    — Всегда берём позиции n, 2n, 3n... пока <= длины рабочей строки, но не больше n слогов. */
-function pickEveryNthSyllable_New(n, src){
+function pickEveryNthSyllable(n, src){
   const L = src.length;
   const enoughForTwo = Math.floor(L / n) >= 2;
   let work = src.slice();
@@ -134,6 +164,7 @@ function pickEveryNthSyllable_New(n, src){
   return { picked, positions, work, extended };
 }
 
+/* Пост-обработка имени (дубликаты/перестановки) */
 function postprocessName(picked){
   const L = picked.length;
   if (L === 0) return picked;
@@ -150,7 +181,7 @@ function postprocessName(picked){
   return picked;
 }
 
-/* Вспомогательное: печать слогов с нумерацией + подсветкой выбранных позиций */
+/* Визуализация строк со слогами + подсветка выбранных позиций */
 function renderSyllableLine(containerId, syllables, pickedPositions){
   const el = document.getElementById(containerId);
   const html = syllables.map((s, i) => {
@@ -159,6 +190,36 @@ function renderSyllableLine(containerId, syllables, pickedPositions){
     return `<span class="${cls}">${idx}.${s}</span>`;
   }).join("  ");
   el.innerHTML = html;
+}
+
+/* Карточки тэттрачастиц для слогов итогового имени */
+function renderParticlesCards(syllables) {
+  const box = document.getElementById("particlesOut");
+  const err = document.getElementById("particlesErr");
+  err.textContent = "";
+
+  if (!syllables || !syllables.length) { box.innerHTML = ""; return; }
+
+  const cards = syllables.map(s => {
+    const p = particlesMap[s];
+    if (p) {
+      // Если в desc есть переносы — у нас white-space: pre-line в CSS
+      return `
+        <div class="card">
+          ${p.img ? `<img src="${p.img}" alt="${p.title || s}" loading="lazy">` : ""}
+          <div class="title">${p.title || s}</div>
+          <div class="desc">${p.desc || ""}</div>
+        </div>`;
+    } else {
+      return `
+        <div class="card">
+          <div class="title">${s}</div>
+          <div class="note">Данных пока нет. Добавьте запись для этого слога в particles.json.</div>
+        </div>`;
+    }
+  }).join("");
+
+  box.innerHTML = cards;
 }
 
 function calculateAll(){
@@ -173,6 +234,7 @@ function calculateAll(){
       document.getElementById("workSyllables").innerHTML = "";
       document.getElementById("workDesc").textContent = "";
       document.getElementById("pickInfo").textContent = "Пожалуйста, выберите тэттраглиф для всех врат.";
+      document.getElementById("particlesOut").innerHTML = "";
       return;
     }
     codes.push(v);
@@ -186,8 +248,8 @@ function calculateAll(){
   const src = getSourceSyllables(codes);
   renderSyllableLine("srcSyllables", src, []); // без подсветки
 
-  // 3) Выбор по новой логике
-  const { picked, positions, work, extended } = pickEveryNthSyllable_New(n, src);
+  // 3) Выбор по логике «полное удвоение при необходимости»
+  const { picked, positions, work, extended } = pickEveryNthSyllable(n, src);
 
   // 4) Пост-обработка имени
   const finalNameParts = postprocessName(picked);
@@ -197,7 +259,6 @@ function calculateAll(){
   document.getElementById("workDesc").textContent = extended
     ? "Рабочая строка (удлинена полным повтором исходной строки для выбора как минимум двух слогов)"
     : "Рабочая строка (удлинение не потребовалось)";
-
   renderSyllableLine("workSyllables", work, positions);
 
   let info = positions.length
@@ -209,6 +270,9 @@ function calculateAll(){
   document.getElementById("pickInfo").textContent = info;
 
   document.getElementById("nameOut").textContent = `Имя печати: ${finalNameParts.join(" ") || "—"}`;
+
+  // 6) Карточки тэттрачастиц для итогового имени
+  renderParticlesCards(finalNameParts);
 }
 
 renderGlyphSelectors();
