@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>Калькулятор числового кода и имени печати — по термам</title>
+<style>
+  body { font-family: sans-serif; max-width: 980px; margin: auto; padding: 20px; }
+  select, button { font-size: 1em; margin: 6px 0; padding: 6px; }
+  .label { font-weight: 700; margin-top: 12px; }
+  .term-row { margin: 10px 0 16px; padding: 10px; border: 1px solid #eee; border-radius: 10px; background: #fafafa; }
+  .term-title { font-weight: 700; }
+  .term-desc { color: #444; margin: 6px 0 8px; }
+  .result { margin-top: 16px; font-weight: 700; font-size: 1.1em; }
+  .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; line-height: 1.7; }
+  .muted { color: #555; font-size: 0.95em; }
+  .syll { display: inline-block; margin-right: 10px; }
+  .pick { font-weight: 700; background: #fff3c4; border-radius: 4px; padding: 1px 4px; }
+  .error { color: #b00020; }
+
+  /* Таблица терм */
+  table { border-collapse: collapse; width: 100%; margin-top: 14px; }
+  th, td { border: 1px solid #e6e6e6; padding: 8px 10px; text-align: left; vertical-align: top; }
+  th { background: #f7f7f7; font-weight: 700; }
+  .btn-row { display: flex; gap: 10px; align-items: center; margin-top: 10px; }
+  .toast { font-size: 0.95em; color: #2c6e2f; display: none; }
+  .toast.show { display: inline; }
+  /* Карточки тэттрачастиц */
+  .particles-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 14px; margin-top: 10px;
+  }
+  .card { border: 1px solid #eee; border-radius: 10px; padding: 10px; background: #fff; }
+  .card img { width: 100%; height: auto; border-radius: 8px; display: block; }
+  .card .title { font-weight: 700; margin-top: 8px; }
+  .card .desc { color: #444; font-size: 0.95em; margin-top: 6px; white-space: pre-line; }
+  .card .note { color: #777; font-size: 0.9em; margin-top: 6px; }
+</style>
+</head>
+<body>
+<h2>Калькулятор числового кода и имени печати — по термам</h2>
+<p class="muted">Выберите по одному тэттраглифу для каждой из 6 терм. Калькулятор посчитает числовой код и имя печати по выбранным тэттраглифам.</p>
+
+<div id="selectors"></div>
+
+<div class="btn-row">
+  <button onclick="calculateAll()">Рассчитать код и имя</button>
+  <button id="copyBtn" onclick="copyName()" disabled>Скопировать имя</button>
+  <span id="copyToast" class="toast">Имя скопировано в буфер обмена</span>
+</div>
+
+<div class="label">Сводная таблица по термам</div>
+<div class="muted">Отражает текущий выбор прямо сейчас (обновляется при расчёте).</div>
+<div id="termaTable"></div>
+
+<div class="result" id="codeOut"></div>
+<div class="result" id="nameOut"></div>
+
+<div class="label">Исходная строка слогов:</div>
+<div class="muted">Последовательность всех слогов выбранных тэттраглифов (в исходном порядке).</div>
+<div id="srcSyllables" class="mono"></div>
+
+<div class="label">Рабочая строка для выбора каждых n‑х слогов:</div>
+<div class="muted" id="workDesc"></div>
+<div id="workSyllables" class="mono"></div>
+<div class="muted" id="pickInfo"></div>
+
+<div class="label">Тэттрачастицы имени:</div>
+<div class="muted">Каждый слог имени соответствует тэттрачастице. Ниже — изображение и расшифровка для каждого слога.</div>
+<div id="particlesOut" class="particles-grid"></div>
+<div id="particlesErr" class="muted error"></div>
+
+<script>
+/* Загрузка словаря тэттрачастиц */
+let particlesMap = {};
+fetch("particles.json")
+  .then(r => { if (!r.ok) throw new Error("particles.json not found"); return r.json(); })
+  .then(data => { particlesMap = data; })
+  .catch(() => {
+    document.getElementById("particlesErr").textContent =
+      "Не удалось загрузить particles.json. Проверьте, что файл рядом со страницей и корректный.";
+    particlesMap = {};
+  });
+
+/* 21 тэттраглиф: имя, код, слоги (Мана‑Рат = «Мана», «Рат») */
+const glyphs = [
+  ["Эль Аталар", 1, ["Ата","Лар"]],
+  ["Эль Ви-Шах", 2, ["Ви","Шах"]],
+  ["Эль Нере-Ар", 3, ["Нере","Ар"]],
+  ["Эль Ви-Нар", 4, ["Ви","Нар"]],
+  ["Эль Эн-Инь-О", 5, ["Эн","Инь","О"]],
+  ["Эль Ра-Дам", 6, ["Ра","Дам"]],
+  ["Эль Муд-Рам", 7, ["Муд","Рам"]],
+  ["Эль Мун-Ио", 8, ["Мун","Ио"]],
+  ["Эль Мар-Кам", 9, ["Мар","Кам"]],
+  ["Эль Рэ-Тан", 10, ["Рэ","Тан"]],
+  ["Эль Ке-Тар", 11, ["Ке","Тар"]],
+  ["Эль Ок-Улос", 12, ["Ок","Улос"]],
+  ["Эль Мана-Рат", 13, ["Мана","Рат"]],
+  ["Эль Хот-Та", 14, ["Хот","Та"]],
+  ["Эль Ле-Дар", 15, ["Ле","Дар"]],
+  ["Эль Аму", 16, ["Эль","Аму"]],
+  ["Эль Прай-Я", 17, ["Прай","Я"]],
+  ["Эль Кар", 18, ["Эль","Кар"]],
+  ["Эль Ошта-Лар", 19, ["Ошта","Лар"]],
+  ["Эль Су-Ни-Я", 20, ["Су","Ни","Я"]],
+  ["Эль Ра", 21, ["Эль","Ра"]],
+];
+
+/* 6 терм с формулировками */
+const termas = [
+  { title: "Первая терма",   desc: "Позволь этому быть" },
+  { title: "Вторая терма",   desc: "Всё уже есть в твоей внутренней Вселенной" },
+  { title: "Третья терма",   desc: "Ты — источник" },
+  { title: "Четвёртая терма",desc: "Ты — зеркало мира" },
+  { title: "Пятая терма",    desc: "Ты — единство" },
+  { title: "Шестая терма",   desc: "Ты — наполненная пустота" },
+];
+
+function renderGlyphSelectors(){
+  const container = document.getElementById("selectors");
+  container.innerHTML = "";
+  for (let i = 0; i < termas.length; i++){
+    const row = document.createElement("div");
+    row.className = "term-row";
+
+    const t = document.createElement("div");
+    t.className = "term-title";
+    t.textContent = `Терма №${i+1}`;
+    const d = document.createElement("div");
+    d.className = "term-desc";
+    d.textContent = `${termas[i].title}: ${termas[i].desc}`;
+
+    const sel = document.createElement("select");
+    sel.id = `terma-${i+1}`;
+    const ph = document.createElement("option");
+    ph.value = "";
+    ph.textContent = "— выберите тэттраглиф —";
+    ph.disabled = true; ph.selected = true;
+    sel.appendChild(ph);
+
+    glyphs.forEach(([name, code])=>{
+      const opt = document.createElement("option");
+      opt.value = code;
+      opt.textContent = `${name} (${code})`;
+      sel.appendChild(opt);
+    });
+
+    row.appendChild(t);
+    row.appendChild(d);
+    row.appendChild(sel);
+    container.appendChild(row);
+  }
+}
+
+/* Вспомогательная карта: код -> имя глифа */
+const codeToGlyphName = new Map(glyphs.map(([name, code]) => [code, name]));
+
+function reduceCode(sum){
+  while (sum > 10) sum = sum.toString().split("").reduce((a,b)=>a + Number(b), 0);
+  if (sum === 1) sum = 10;
+  return sum;
+}
+
+function getSourceSyllables(codes){
+  const byCode = new Map(glyphs.map(([name, code, syll]) => [code, syll]));
+  const seq = [];
+  codes.forEach(c => { const s = byCode.get(c); if (s) seq.push(...s); });
+  return seq;
+}
+
+/* Логика выбора n‑х слогов (с полным удвоением при необходимости) */
+function pickEveryNthSyllable(n, src){
+  const L = src.length;
+  const enoughForTwo = Math.floor(L / n) >= 2;
+  let work = src.slice();
+  let extended = false;
+
+  if (!enoughForTwo) {
+    work = src.concat(src);   // строго полное удвоение
+    extended = true;
+  }
+
+  const maxIndex = work.length;
+  const picked = [];
+  const positions = [];
+
+  for (let k = 1; k <= n; k++) {
+    const pos = n * k;
+    if (pos <= maxIndex) {
+      picked.push(work[pos - 1]);
+      positions.push(pos);
+    } else {
+      break;
+    }
+  }
+  return { picked, positions, work, extended };
+}
+
+/* Пост-обработка имени */
+function postprocessName(picked){
+  const L = picked.length;
+  if (L === 0) return picked;
+  if (L === 2 && picked[0] === picked[1]) return picked;
+  if (L === 3) {
+    if (picked[0] === picked[1] && picked[1] !== picked[2]) return [picked[0], picked[2], picked[1]];
+    if (picked[1] === picked[2] && picked[0] !== picked[1]) return [picked[1], picked[0], picked[2]];
+    return picked;
+  }
+  const seen = new Set();
+  const unique = [];
+  picked.forEach(s => { if (!seen.has(s)) { seen.add(s); unique.push(s); } });
+  if (unique.length >= 2) return unique;
+  return picked;
+}
+
+/* Строки со слогами + подсветка выбранных позиций */
+function renderSyllableLine(containerId, syllables, pickedPositions){
+  const el = document.getElementById(containerId);
+  const html = syllables.map((s, i) => {
+    const idx = i + 1;
+    const cls = pickedPositions.includes(idx) ? 'syll pick' : 'syll';
+    return `<span class="${cls}">${idx}.${s}</span>`;
+  }).join("  ");
+  el.innerHTML = html;
+}
+
+/* Карточки тэттрачастиц для слогов итогового имени */
+function renderParticlesCards(syllables) {
+  const box = document.getElementById("particlesOut");
+  const err = document.getElementById("particlesErr");
+  err.textContent = "";
+
+  if (!syllables || !syllables.length) { box.innerHTML = ""; return; }
+
+  const cards = syllables.map(s => {
+    const p = particlesMap[s];
+    if (p) {
+      return `
+        <div class="card">
+          ${p.img ? `<img src="${p.img}" alt="${p.title || s}" loading="lazy">` : ""}
+          <div class="title">${p.title || s}</div>
+          <div class="desc">${p.desc || ""}</div>
+        </div>`;
+    } else {
+      return `
+        <div class="card">
+          <div class="title">${s}</div>
+          <div class="note">Данных пока нет. Добавьте запись для этого слога в particles.json.</div>
+        </div>`;
+    }
+  }).join("");
+
+  box.innerHTML = cards;
+}
+
+/* Таблица: Терма | Определение | Тэттраглиф */
+function renderTermaTable(codes) {
+  const box = document.getElementById("termaTable");
+  const rows = termas.map((t, i) => {
+    const code = codes[i];
+    const glyphName = code ? (codeToGlyphName.get(code) || "—") : "—";
+    return `
+      <tr>
+        <td>${t.title}</td>
+        <td>${t.desc}</td>
+        <td>${glyphName}</td>
+      </tr>`;
+  }).join("");
+  box.innerHTML = `
+    <table>
+      <thead>
+        <tr><th>Терма</th><th>Определение</th><th>Тэттраглиф</th></tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+}
+
+/* Копирование имени в буфер */
+function copyName() {
+  const nameText = document.getElementById("nameOut").textContent.replace("Имя печати: ", "").trim();
+  if (!nameText || nameText === "—") return;
+  navigator.clipboard.writeText(nameText).then(() => {
+    const toast = document.getElementById("copyToast");
+    toast.classList.add("show");
+    setTimeout(() => toast.classList.remove("show"), 1300);
+  });
+}
+
+function calculateAll(){
+  // собираем коды выбранных глифов для 6 терм
+  const selects = termas.map((_, i) => document.getElementById(`terma-${i+1}`));
+  const codes = [];
+  let incomplete = false;
+  for (const sel of selects) {
+    const v = parseInt(sel.value, 10);
+    if (isNaN(v)) { incomplete = true; codes.push(null); } else { codes.push(v); }
+  }
+
+  // Заполнить таблицу текущим выбором всегда (даже если не всё выбрано)
+  renderTermaTable(codes);
+
+  if (incomplete) {
+    document.getElementById("codeOut").textContent = "";
+    document.getElementById("nameOut").textContent = "";
+    document.getElementById("srcSyllables").innerHTML = "";
+    document.getElementById("workSyllables").innerHTML = "";
+    document.getElementById("workDesc").textContent = "";
+    document.getElementById("pickInfo").textContent = "Пожалуйста, выберите тэттраглиф для каждой термы.";
+    document.getElementById("particlesOut").innerHTML = "";
+    document.getElementById("copyBtn").disabled = true;
+    return;
+  }
+
+  // 1) Финальный числовой код
+  const sum = codes.reduce((a,b)=>a + (b||0), 0);
+  const n = reduceCode(sum);
+
+  // 2) Исходная строка
+  const src = getSourceSyllables(codes);
+  renderSyllableLine("srcSyllables", src, []);
+
+  // 3) Выбор по логике «полное удвоение при необходимости»
+  const { picked, positions, work, extended } = pickEveryNthSyllable(n, src);
+
+  // 4) Пост-обработка имени
+  const finalNameParts = postprocessName(picked);
+
+  // 5) Выводы
+  document.getElementById("codeOut").textContent = `Финальный числовой код: ${n}`;
+  document.getElementById("workDesc").textContent = extended
+    ? "Рабочая строка (удлинена полным повтором исходной строки для выбора как минимум двух слогов)"
+    : "Рабочая строка (удлинение не потребовалось)";
+  renderSyllableLine("workSyllables", work, positions);
+
+  let info = positions.length
+    ? `Выбранные позиции: ${positions.join(", ")} (каждый ${n}-й слог). `
+    : `Нет доступных позиций, кратных ${n}, в рабочей строке. `;
+  if (positions.length >= 2) {
+    info += "Выбор слогов завершён: набрано два или более слогов, как предусмотрено в правилах формирования имени печати.";
+  }
+  document.getElementById("pickInfo").textContent = info;
+
+  const finalName = finalNameParts.join(" ") || "—";
+  document.getElementById("nameOut").textContent = `Имя печати: ${finalName}`;
+  document.getElementById("copyBtn").disabled = (finalName === "—");
+
+  // 6) Карточки тэттрачастиц
+  renderParticlesCards(finalNameParts);
+}
+
+renderGlyphSelectors();
+</script>
+</body>
+</html>
