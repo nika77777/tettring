@@ -199,11 +199,20 @@ function renderGatesTable(codes){
   const box = document.getElementById("gatesTable");
   const rows = codes.map((code, i) => {
     const name = code ? (codeToGlyphName.get(code) || "—") : "—";
-    return `<tr><td>Врата №${i+1}</td><td>${name}</td></tr>`;
+    const syll = code ? (codeToSyllables.get(code) || []).join(", ") : "—";
+    return `
+      <tr>
+        <td>Врата №${i+1}</td>
+        <td>${name}</td>
+        <td>${syll}</td>
+      </tr>`;
   }).join("");
+
   box.innerHTML = `
     <table>
-      <thead><tr><th>Врата</th><th>Тэттраглиф</th></tr></thead>
+      <thead>
+        <tr><th>Врата</th><th>Тэттраглиф</th><th>Слоги</th></tr>
+      </thead>
       <tbody>${rows}</tbody>
     </table>`;
 }
