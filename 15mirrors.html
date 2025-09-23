@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>Калькулятор кода и имени печати — 15 Зеркал</title>
+<style>
+  body { font-family: sans-serif; max-width: 1000px; margin: auto; padding: 20px; }
+  select, button { font-size: 1em; margin: 6px 0; padding: 6px; }
+  .label { font-weight: 700; margin-top: 12px; }
+  .row { margin: 10px 0 16px; padding: 10px; border: 1px solid #eee; border-radius: 10px; background: #fafafa; }
+  .row-title { font-weight: 700; }
+  .row-desc { color: #444; margin: 6px 0 8px; }
+  .result { margin-top: 16px; font-weight: 700; font-size: 1.1em; }
+  .mono { font-family: ui-monospace, Menlo, Consolas, monospace; line-height: 1.7; }
+  .muted { color: #555; font-size: 0.95em; }
+  .syll { display: inline-block; margin-right: 10px; }
+  .pick { font-weight: 700; background: #fff3c4; border-radius: 4px; padding: 1px 4px; }
+  .btn-row { display: flex; gap: 10px; align-items: center; margin-top: 10px; }
+  .toast { font-size: 0.95em; color: #2c6e2f; display: none; }
+  .toast.show { display: inline; }
+  table { border-collapse: collapse; width: 100%; margin-top: 14px; }
+  th, td { border: 1px solid #e6e6e6; padding: 8px 10px; text-align: left; vertical-align: top; }
+  th { background: #f7f7f7; font-weight: 700; }
+  .particles-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 14px; margin-top: 10px;
+  }
+  .card { border: 1px solid #eee; border-radius: 10px; padding: 10px; background: #fff; }
+  .card img { width: 100%; height: auto; border-radius: 8px; display: block; }
+  .card .title { font-weight: 700; margin-top: 8px; }
+  .card .desc { color: #444; font-size: 0.95em; margin-top: 6px; white-space: pre-line; }
+  .card .note { color: #777; font-size: 0.9em; margin-top: 6px; }
+  .error { color: #b00020; }
+</style>
+</head>
+<body>
+<h2>Калькулятор числового кода и имени печати — 15 Зеркал</h2>
+<p class="muted">Выберите по одному тэттраглифу для каждого из 15 врат. Калькулятор посчитает числовой код и имя печати по выбранным тэттраглифам.</p>
+
+<div id="selectors"></div>
+
+<div class="btn-row">
+  <button onclick="calculateAll()">Рассчитать код и имя</button>
+  <button id="copyBtn" onclick="copyName()" disabled>Скопировать имя</button>
+  <span id="copyToast" class="toast">Имя скопировано в буфер обмена</span>
+</div>
+
+<div class="label">Сводная таблица по вратам</div>
+<div class="muted">Текущий выбор: Зеркало/Элемент → Тэттраглиф → Слоги.</div>
+<div id="gatesTable"></div>
+
+<div class="result" id="codeOut"></div>
+<div class="result" id="nameOut"></div>
+
+<div class="label">Исходная строка слогов:</div>
+<div class="muted">Последовательность всех слогов выбранных тэттраглифов (в исходном порядке).</div>
+<div id="srcSyllables" class="mono"></div>
+
+<div class="label">Рабочая строка для выбора каждых n-х слогов:</div>
+<div class="muted" id="workDesc"></div>
+<div id="workSyllables" class="mono"></div>
+<div class="muted" id="pickInfo"></div>
+
+<div class="label">Тэттрачастицы имени:</div>
+<div class="muted">Каждый слог имени соответствует тэттрачастице. Ниже — изображение и расшифровка для каждого слога.</div>
+<div id="particlesOut" class="particles-grid"></div>
+<div id="particlesErr" class="muted error"></div>
+
+<script>
+/* particles.json (словарь слогов: картинка + описание) */
+let particlesMap = {};
+fetch("particles.json")
+  .then(r => { if (!r.ok) throw new Error("particles.json not found"); return r.json(); })
+  .then(data => { particlesMap = data; })
+  .catch(() => {
+    document.getElementById("particlesErr").textContent =
+      "Не удалось загрузить particles.json. Проверьте, что файл рядом со страницей и корректный.";
+    particlesMap = {};
+  });
+
+/* 21 тэттраглиф: имя, код, слоги («Эль Мана-Рат» = «Мана», «Рат») */
+const glyphs = [
+  ["Эль Аталар", 1, ["Ата","Лар"]],
+  ["Эль Ви-Шах", 2, ["Ви","Шах"]],
+  ["Эль Нере-Ар", 3, ["Нере","Ар"]],
+  ["Эль Ви-Нар", 4, ["Ви","Нар"]],
+  ["Эль Эн-Инь-О", 5, ["Эн","Инь","О"]],
+  ["Эль Ра-Дам", 6, ["Ра","Дам"]],
+  ["Эль Муд-Рам", 7, ["Муд","Рам"]],
+  ["Эль Мун-Ио", 8, ["Мун","Ио"]],
+  ["Эль Мар-Кам", 9, ["Мар","Кам"]],
+  ["Эль Рэ-Тан", 10, ["Рэ","Тан"]],
+  ["Эль Ке-Тар", 11, ["Ке","Тар"]],
+  ["Эль Ок-Улос", 12, ["Ок","Улос"]],
+  ["Эль Мана-Рат", 13, ["Мана","Рат"]],
+  ["Эль Хот-Та", 14, ["Хот","Та"]],
+  ["Эль Ле-Дар", 15, ["Ле","Дар"]],
+  ["Эль Аму", 16, ["Эль","Аму"]],
+  ["Эль Прай-Я", 17, ["Прай","Я"]],
+  ["Эль Кар", 18, ["Эль","Кар"]],
+  ["Эль Ошта-Лар", 19, ["Ошта","Лар"]],
+  ["Эль Су-Ни-Я", 20, ["Су","Ни","Я"]],
+  ["Эль Ра", 21, ["Эль","Ра"]],
+];
+
+const codeToGlyphName = new Map(glyphs.map(([name, code]) => [code, name]));
+const codeToSyllables = new Map(glyphs.map(([name, code, syll]) => [code, syll]));
+
+/* 15 врат с названиями (точно по вашему списку) */
+const MIRRORS = [
+  "Зеркало Мужской Родовой Энергии",
+  "Зеркало Женской Родовой Энергии",
+  "Зеркало Единого Рода",
+  "Зеркало Бытия",
+  "Зеркало Души",
+  "Зеркало Сознания",
+  "Зеркало Коммуникации",
+  "Зеркало Видения",
+  "Тигле/Кристалл Сознания",
+  "Земля (Энергетический уровень: Зерно-Род, Сознательный уровень: Замысел)",
+  "Огонь (Энергетический уровень: Вдохновение, Сознательный уровень: Воля)",
+  "Плазма (Энергетический уровень: Любовь, Сознательный уровень: Магия)",
+  "Воздух (Энергетический уровень: Обмен, Сознательный уровень: Промысел)",
+  "Вода (Энергетический уровень: Поток, Сознательный уровень: Сценарий)",
+  "Пустотность (Энергетический уровень: Тайна, Сознательный уровень: Автор)"
+];
+
+function renderSelectors(){
+  const container = document.getElementById("selectors");
+  container.innerHTML = "";
+  for (let i = 0; i < MIRRORS.length; i++){
+    const row = document.createElement("div");
+    row.className = "row";
+    const t = document.createElement("div");
+    t.className = "row-title";
+    t.textContent = `Врата №${i+1}`;
+    const d = document.createElement("div");
+    d.className = "row-desc";
+    d.textContent = MIRRORS[i];
+
+    const sel = document.createElement("select");
+    sel.id = `gate-${i+1}`;
+    const ph = document.createElement("option");
+    ph.value = "";
+    ph.textContent = "— выберите тэттраглиф —";
+    ph.disabled = true; ph.selected = true;
+    sel.appendChild(ph);
+
+    glyphs.forEach(([name, code])=>{
+      const opt = document.createElement("option");
+      opt.value = code;
+      opt.textContent = `${name} (${code})`;
+      sel.appendChild(opt);
+    });
+
+    row.appendChild(t);
+    row.appendChild(d);
+    row.appendChild(sel);
+    container.appendChild(row);
+  }
+}
+
+/* Редукция финального кода (до 2–10, 1 → 10) */
+function reduceCode(sum){
+  while (sum > 10) sum = sum.toString().split("").reduce((a,b)=>a + Number(b), 0);
+  if (sum === 1) sum = 10;
+  return sum;
+}
+
+/* Исходная строка слогов */
+function getSourceSyllables(codes){
+  const out = [];
+  codes.forEach(c => { const s = codeToSyllables.get(c); if (s) out.push(...s); });
+  return out;
+}
+
+/* Выбор каждых n-х слогов:
+   — если floor(L/n) >= 2, не удлиняем;
+   — иначе один раз удваиваем (src+src) и берём по всей удвоенной длине;
+   — позиции: n, 2n, 3n... пока <= длины рабочей строки, не более n слогов. */
+function pickEveryNthSyllable(n, src){
+  const L = src.length;
+  const enoughForTwo = Math.floor(L / n) >= 2;
+  let work = src.slice();
+  let extended = false;
+  if (!enoughForTwo) { work = src.concat(src); extended = true; }
+  const maxIndex = work.length;
+  const picked = [], positions = [];
+  for (let k = 1; k <= n; k++){
+    const pos = n * k;
+    if (pos <= maxIndex) { picked.push(work[pos-1]); positions.push(pos); } else break;
+  }
+  return { picked, positions, work, extended };
+}
+
+/* Пост-обработка имени (удаление/разведение дублей по правилам) */
+function postprocessName(p){
+  const L = p.length;
+  if (L === 0) return p;
+  if (L === 2 && p[0] === p[1]) return p;
+  if (L === 3){
+    if (p[0] === p[1] && p[1] !== p[2]) return [p[0], p[2], p[1]];
+    if (p[1] === p[2] && p[0] !== p[1]) return [p[1], p[0], p[2]];
+    return p;
+  }
+  const seen = new Set(), unique = [];
+  p.forEach(s => { if (!seen.has(s)) { seen.add(s); unique.push(s); } });
+  if (unique.length >= 2) return unique;
+  return p;
+}
+
+/* Визуализация строк со слогами */
+function renderSyllableLine(containerId, syllables, pickedPositions){
+  const el = document.getElementById(containerId);
+  el.innerHTML = syllables.map((s,i)=>{
+    const idx = i+1, cls = pickedPositions.includes(idx) ? 'syll pick' : 'syll';
+    return `<span class="${cls}">${idx}.${s}</span>`;
+  }).join("  ");
+}
+
+/* Таблица: Врата | Тэттраглиф | Слоги */
+function renderGatesTable(codes){
+  const box = document.getElementById("gatesTable");
+  const rows = codes.map((code, i) => {
+    const name = code ? (codeToGlyphName.get(code) || "—") : "—";
+    const syll = code ? (codeToSyllables.get(code) || []).join(", ") : "—";
+    return `<tr>
+      <td>Врата №${i+1}<br><span class="muted">${MIRRORS[i]}</span></td>
+      <td>${name}</td>
+      <td>${syll}</td>
+    </tr>`;
+  }).join("");
+  box.innerHTML = `
+    <table>
+      <thead>
+        <tr><th>Зеркало / Элемент</th><th>Тэттраглиф</th><th>Слоги</th></tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+}
+
+/* Карточки тэттрачастиц для слогов итогового имени */
+function renderParticlesCards(syllables){
+  const box = document.getElementById("particlesOut");
+  const err = document.getElementById("particlesErr");
+  err.textContent = "";
+  if (!syllables || !syllables.length) { box.innerHTML = ""; return; }
+  box.innerHTML = syllables.map(s=>{
+    const p = particlesMap[s];
+    if (p) {
+      return `<div class="card">
+        ${p.img ? `<img src="${p.img}" alt="${p.title || s}" loading="lazy">` : ""}
+        <div class="title">${p.title || s}</div>
+        <div class="desc">${p.desc || ""}</div>
+      </div>`;
+    }
+    return `<div class="card">
+      <div class="title">${s}</div>
+      <div class="note">Данных пока нет. Добавьте запись для этого слога в particles.json.</div>
+    </div>`;
+  }).join("");
+}
+
+/* Копирование имени в буфер */
+function copyName(){
+  const txt = document.getElementById("nameOut").textContent.replace("Имя печати: ", "").trim();
+  if (!txt || txt === "—") return;
+  navigator.clipboard.writeText(txt).then(()=>{
+    const toast = document.getElementById("copyToast");
+    toast.classList.add("show");
+    setTimeout(()=>toast.classList.remove("show"), 1300);
+  });
+}
+
+/* Главный расчёт */
+function calculateAll(){
+  const selects = MIRRORS.map((_, i)=>document.getElementById(`gate-${i+1}`));
+  const codes = [];
+  let incomplete = false;
+  for (const sel of selects){
+    const v = parseInt(sel.value, 10);
+    if (isNaN(v)) { incomplete = true; codes.push(null); } else { codes.push(v); }
+  }
+
+  // Таблица — всегда по текущему состоянию
+  renderGatesTable(codes);
+
+  if (incomplete){
+    document.getElementById("codeOut").textContent = "";
+    document.getElementById("nameOut").textContent = "";
+    document.getElementById("srcSyllables").innerHTML = "";
+    document.getElementById("workSyllables").innerHTML = "";
+    document.getElementById("workDesc").textContent = "";
+    document.getElementById("pickInfo").textContent = "Пожалуйста, выберите тэттраглиф для всех 15 врат.";
+    document.getElementById("particlesOut").innerHTML = "";
+    document.getElementById("copyBtn").disabled = true;
+    return;
+  }
+
+  // Финальный код
+  const sum = codes.reduce((a,b)=>a + (b||0), 0);
+  const n = reduceCode(sum);
+
+  // Исходная строка
+  const src = getSourceSyllables(codes);
+  renderSyllableLine("srcSyllables", src, []);
+
+  // Выбор каждых n-х слогов
+  const { picked, positions, work, extended } = pickEveryNthSyllable(n, src);
+  const finalNameParts = postprocessName(picked);
+
+  // Вывод
+  document.getElementById("codeOut").textContent = `Финальный числовой код: ${n}`;
+  document.getElementById("workDesc").textContent = extended
+    ? "Рабочая строка (удлинена полным повтором исходной строки для выбора как минимум двух слогов)"
+    : "Рабочая строка (удлинение не потребовалось)";
+  renderSyllableLine("workSyllables", work, positions);
+
+  let info = positions.length
+    ? `Выбранные позиции: ${positions.join(", ")} (каждый ${n}-й слог). `
+    : `Нет доступных позиций, кратных ${n}, в рабочей строке. `;
+  if (positions.length >= 2){
+    info += "Выбор слогов завершён: набрано два или более слогов, как предусмотрено в правилах формирования имени печати.";
+  }
+  document.getElementById("pickInfo").textContent = info;
+
+  const finalName = finalNameParts.join(" ") || "—";
+  document.getElementById("nameOut").textContent = `Имя печати: ${finalName}`;
+  document.getElementById("copyBtn").disabled = (finalName === "—");
+
+  // Карточки тэттрачастиц
+  renderParticlesCards(finalNameParts);
+}
+
+renderSelectors();
+</script>
+</body>
+</html>
