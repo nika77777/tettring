@@ -19,7 +19,7 @@
   .btn-row { display: flex; gap: 10px; align-items: center; margin-top: 10px; flex-wrap: wrap; }
   .toast { font-size: 0.95em; color: #2c6e2f; display: none; }
   .toast.show { display: inline; }
-  .error { color:#b00020; }
+  .error { color:#b00020; margin-top: 6px; }
   table { border-collapse: collapse; width: 100%; margin-top: 14px; }
   th, td { border: 1px solid #e6e6e6; padding: 8px 10px; text-align: left; vertical-align: top; }
   th { background: #f7f7f7; font-weight: 700; }
@@ -39,8 +39,10 @@
 
 <div class="btn-row">
   <button onclick="calculateAll()">Рассчитать код и имя</button>
-  <button id="copyBtn" onclick="copyName()" disabled>Скопировать имя</button>
-  <span id="copyToast" class="toast">Имя скопировано в буфер обмена</span>
+  <button id="copyNameBtn" onclick="copyName()" disabled>Скопировать имя</button>
+  <button id="copyTableBtn" onclick="copyTable()" disabled>Скопировать таблицу</button>
+  <button id="copyPartsBtn" onclick="copyTettraParts()" disabled>Скопировать тэттра-частицы (имя → значение)</button>
+  <span id="copyToast" class="toast">Скопировано в буфер обмена</span>
 </div>
 
 <div id="dupWarn" class="error"></div>
@@ -120,13 +122,10 @@ function renderSelectors(){
     const row = document.createElement("div"); row.className = "row";
     const t = document.createElement("div"); t.className = "row-title"; t.textContent = GATES[i].title;
     const d = document.createElement("div"); d.className = "row-desc"; d.textContent = GATES[i].desc;
-
     const sel = document.createElement("select"); sel.id = `gate-${i+1}`;
     const ph = document.createElement("option"); ph.value = ""; ph.textContent = "— выберите тэттраглиф —"; ph.disabled = true; ph.selected = true; sel.appendChild(ph);
     glyphs.forEach(([name, code]) => { const opt = document.createElement("option"); opt.value = code; opt.textContent = `${name} (${code})`; sel.appendChild(opt); });
-
-    row.appendChild(t); row.appendChild(d); row.appendChild(sel);
-    container.appendChild(row);
+    row.appendChild(t); row.appendChild(d); row.appendChild(sel); container.appendChild(row);
   }
   attachGateHandlers();
 }
@@ -192,8 +191,35 @@ function renderParticlesCards(syllables){
 function copyName(){
   const txt=document.getElementById("nameOut").textContent.replace("Имя печати: ","").trim();
   if(!txt||txt==="—") return;
-  navigator.clipboard.writeText(txt).then(()=>{ const toast=document.getElementById("copyToast"); toast.classList.add("show"); setTimeout(()=>toast.classList.remove("show"),1300); });
+  navigator.clipboard.writeText(txt).then(()=>toast());
 }
+
+/* Скопировать таблицу (TSV: Врата | Описание | Тэттраглиф | Слоги) */
+function copyTable(){
+  const rows = [...document.querySelectorAll("#gatesTable tbody tr")].map(tr =>
+    [...tr.querySelectorAll("td")].map(td => td.textContent.replace(/\s+/g," ").trim())
+  );
+  const header = ["Врата","Описание","Тэттраглиф","Слоги"];
+  const tsv = [header, ...rows].map(r => r.join("\t")).join("\n");
+  navigator.clipboard.writeText(tsv).then(()=>toast());
+}
+
+/* Скопировать тэттра-частицы: «Слог — Значение» по итоговому имени */
+function copyTettraParts(){
+  const nameText = document.getElementById("nameOut").textContent.replace("Имя печати: ","").trim();
+  if(!nameText || nameText==="—") return;
+
+  const syllables = nameText.split(/\s+/).filter(Boolean);
+  const lines = syllables.map(s => {
+    const data = particlesMap[s];
+    const desc = data?.desc ? data.desc.replace(/\s+\n/g,"\n").trim() : "(нет описания)";
+    return `${s} — ${desc}`;
+  });
+  navigator.clipboard.writeText(lines.join("\n")).then(()=>toast());
+}
+
+/* Тост-уведомление «Скопировано…» */
+function toast(){ const t=document.getElementById("copyToast"); t.classList.add("show"); setTimeout(()=>t.classList.remove("show"),1300); }
 
 /* Анти-дубликат: живые замки + проверка при расчёте */
 function getSelectedCodes(){ return Array.from(document.querySelectorAll("#selectors select")).map(s=>s.value).filter(v=>v!==""); }
@@ -220,6 +246,7 @@ function calculateAll(){
   const codes=[]; let incomplete=false;
   for(const sel of selects){ const v=parseInt(sel.value,10); if(isNaN(v)){ incomplete=true; codes.push(null);} else { codes.push(v);} }
 
+  // Всегда обновляем таблицу
   renderGatesTable(codes);
 
   // Проверка дубликатов
@@ -228,7 +255,8 @@ function calculateAll(){
   codes.forEach(c=>{ if(c==null) return; const k=String(c); seen.set(k,(seen.get(k)||0)+1); });
   for(const [k,cnt] of seen.entries()){ if(cnt>1){ hasDup=true; break; } }
 
-  if(incomplete || hasDup){
+  // Сброс результатов при ошибках
+  const disableOutputs = ()=>{
     document.getElementById("codeOut").textContent="";
     document.getElementById("nameOut").textContent="";
     document.getElementById("srcSyllables").innerHTML="";
@@ -236,23 +264,27 @@ function calculateAll(){
     document.getElementById("workDesc").textContent="";
     document.getElementById("pickInfo").textContent = hasDup ? "Обнаружены дубликаты выбора." : "Пожалуйста, выберите тэттраглиф для всех 7 врат.";
     document.getElementById("particlesOut").innerHTML="";
-    document.getElementById("copyBtn").disabled=true;
+    document.getElementById("copyNameBtn").disabled = true;
+    document.getElementById("copyTableBtn").disabled = true;
+    document.getElementById("copyPartsBtn").disabled = true;
+  };
+
+  if(incomplete || hasDup){
+    if(hasDup) dupWarn.textContent="Нельзя выбирать одинаковые тэттраглифы для разных врат. Измените повторяющиеся выборы.";
+    disableOutputs();
     return;
   }
 
-  // Финальный код
+  // Финальный код и имя
   const sum=codes.reduce((a,b)=>a+(b||0),0);
   const n=reduceCode(sum);
 
-  // Исходная строка
   const src=getSourceSyllables(codes);
   renderSyllableLine("srcSyllables", src, []);
 
-  // Выбор каждых n-х слогов
   const { picked, positions, work, extended } = pickEveryNthSyllable(n, src);
   const finalNameParts = postprocessName(picked);
 
-  // Вывод
   document.getElementById("codeOut").textContent = `Финальный числовой код: ${n}`;
   document.getElementById("workDesc").textContent = extended
     ? "Рабочая строка (удлинена полным повтором исходной строки для выбора как минимум двух слогов)"
@@ -265,7 +297,12 @@ function calculateAll(){
 
   const finalName = finalNameParts.join(" ") || "—";
   document.getElementById("nameOut").textContent = `Имя печати: ${finalName}`;
-  document.getElementById("copyBtn").disabled = (finalName === "—");
+
+  // Включаем кнопки копирования
+  const canCopy = finalName !== "—";
+  document.getElementById("copyNameBtn").disabled  = !canCopy;
+  document.getElementById("copyTableBtn").disabled = !canCopy;
+  document.getElementById("copyPartsBtn").disabled = !canCopy;
 
   // Карточки тэттрачастиц
   renderParticlesCards(finalNameParts);
