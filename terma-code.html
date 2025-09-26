@@ -3,28 +3,26 @@
 <head>
 <meta charset="UTF-8">
 <title>Калькулятор числового кода и имени печати — по термам</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
   body { font-family: sans-serif; max-width: 980px; margin: auto; padding: 20px; }
   select, button { font-size: 1em; margin: 6px 0; padding: 6px; }
   .label { font-weight: 700; margin-top: 12px; }
-  .term-row { margin: 10px 0 16px; padding: 10px; border: 1px solid #eee; border-radius: 10px; background: #fafafa; }
-  .term-title { font-weight: 700; }
-  .term-desc { color: #444; margin: 6px 0 8px; }
+  .row { margin: 10px 0 16px; padding: 10px; border: 1px solid #eee; border-radius: 10px; background: #fafafa; }
+  .row-title { font-weight: 700; }
+  .row-desc { color: #444; margin: 6px 0 8px; }
   .result { margin-top: 16px; font-weight: 700; font-size: 1.1em; }
-  .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; line-height: 1.7; }
+  .mono { font-family: ui-monospace, Menlo, Consolas, monospace; line-height: 1.7; }
   .muted { color: #555; font-size: 0.95em; }
   .syll { display: inline-block; margin-right: 10px; }
   .pick { font-weight: 700; background: #fff3c4; border-radius: 4px; padding: 1px 4px; }
-  .error { color: #b00020; }
-
-  /* Таблица терм */
+  .btn-row { display: flex; gap: 10px; align-items: center; margin-top: 10px; flex-wrap: wrap; }
+  .toast { font-size: 0.95em; color: #2c6e2f; display: none; }
+  .toast.show { display: inline; }
+  .error { color:#b00020; }
   table { border-collapse: collapse; width: 100%; margin-top: 14px; }
   th, td { border: 1px solid #e6e6e6; padding: 8px 10px; text-align: left; vertical-align: top; }
   th { background: #f7f7f7; font-weight: 700; }
-  .btn-row { display: flex; gap: 10px; align-items: center; margin-top: 10px; }
-  .toast { font-size: 0.95em; color: #2c6e2f; display: none; }
-  .toast.show { display: inline; }
-  /* Карточки тэттрачастиц */
   .particles-grid {
     display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
     gap: 14px; margin-top: 10px;
@@ -38,7 +36,7 @@
 </head>
 <body>
 <h2>Калькулятор числового кода и имени печати — по термам</h2>
-<p class="muted">Выберите по одному тэттраглифу для каждой из 6 терм. Калькулятор посчитает числовой код и имя печати по выбранным тэттраглифам.</p>
+<p class="muted">Выберите по одному тэттраглифу для каждой термы. Калькулятор посчитает числовой код и имя печати.</p>
 
 <div id="selectors"></div>
 
@@ -48,8 +46,10 @@
   <span id="copyToast" class="toast">Имя скопировано в буфер обмена</span>
 </div>
 
+<div id="dupWarn" class="error"></div>
+
 <div class="label">Сводная таблица по термам</div>
-<div class="muted">Отражает текущий выбор прямо сейчас (обновляется при расчёте).</div>
+<div class="muted">Терма → Определение → Выбранный тэттраглиф.</div>
 <div id="termaTable"></div>
 
 <div class="result" id="codeOut"></div>
@@ -59,7 +59,7 @@
 <div class="muted">Последовательность всех слогов выбранных тэттраглифов (в исходном порядке).</div>
 <div id="srcSyllables" class="mono"></div>
 
-<div class="label">Рабочая строка для выбора каждых n‑х слогов:</div>
+<div class="label">Рабочая строка для выбора каждых n-х слогов:</div>
 <div class="muted" id="workDesc"></div>
 <div id="workSyllables" class="mono"></div>
 <div class="muted" id="pickInfo"></div>
@@ -70,18 +70,12 @@
 <div id="particlesErr" class="muted error"></div>
 
 <script>
-/* Загрузка словаря тэттрачастиц */
 let particlesMap = {};
 fetch("particles.json")
-  .then(r => { if (!r.ok) throw new Error("particles.json not found"); return r.json(); })
+  .then(r => { if (!r.ok) throw new Error(); return r.json(); })
   .then(data => { particlesMap = data; })
-  .catch(() => {
-    document.getElementById("particlesErr").textContent =
-      "Не удалось загрузить particles.json. Проверьте, что файл рядом со страницей и корректный.";
-    particlesMap = {};
-  });
+  .catch(() => { document.getElementById("particlesErr").textContent = "Не удалось загрузить particles.json."; particlesMap = {}; });
 
-/* 21 тэттраглиф: имя, код, слоги (Мана‑Рат = «Мана», «Рат») */
 const glyphs = [
   ["Эль Аталар", 1, ["Ата","Лар"]],
   ["Эль Ви-Шах", 2, ["Ви","Шах"]],
@@ -106,7 +100,9 @@ const glyphs = [
   ["Эль Ра", 21, ["Эль","Ра"]],
 ];
 
-/* 6 терм с формулировками */
+const codeToGlyphName = new Map(glyphs.map(([name, code]) => [code, name]));
+const codeToSyllables = new Map(glyphs.map(([name, code, syll]) => [code, syll]));
+
 const termas = [
   { title: "Первая терма",   desc: "Позволь этому быть" },
   { title: "Вторая терма",   desc: "Всё уже есть в твоей внутренней Вселенной" },
@@ -116,239 +112,118 @@ const termas = [
   { title: "Шестая терма",   desc: "Ты — наполненная пустота" },
 ];
 
-function renderGlyphSelectors(){
-  const container = document.getElementById("selectors");
-  container.innerHTML = "";
-  for (let i = 0; i < termas.length; i++){
-    const row = document.createElement("div");
-    row.className = "term-row";
+function renderSelectors(){
+  const container=document.getElementById("selectors"); container.innerHTML="";
+  for(let i=0;i<termas.length;i++){
+    const row=document.createElement("div"); row.className="row";
+    const t=document.createElement("div"); t.className="row-title"; t.textContent=`Терма №${i+1}`;
+    const d=document.createElement("div"); d.className="row-desc"; d.textContent=`${termas[i].title}: ${termas[i].desc}`;
+    const sel=document.createElement("select"); sel.id=`terma-${i+1}`;
+    const ph=document.createElement("option"); ph.value=""; ph.textContent="— выберите тэттраглиф —"; ph.disabled=true; ph.selected=true; sel.appendChild(ph);
+    glyphs.forEach(([name,code])=>{ const opt=document.createElement("option"); opt.value=code; opt.textContent=`${name} (${code})`; sel.appendChild(opt); });
+    row.appendChild(t); row.appendChild(d); row.appendChild(sel); container.appendChild(row);
+  }
+  attachGateHandlers();
+}
 
-    const t = document.createElement("div");
-    t.className = "term-title";
-    t.textContent = `Терма №${i+1}`;
-    const d = document.createElement("div");
-    d.className = "term-desc";
-    d.textContent = `${termas[i].title}: ${termas[i].desc}`;
+function reduceCode(sum){ while(sum>10) sum=sum.toString().split("").reduce((a,b)=>a+Number(b),0); if(sum===1) sum=10; return sum; }
+function getSourceSyllables(codes){ const out=[]; codes.forEach(c=>{ const s=codeToSyllables.get(c); if(s) out.push(...s); }); return out; }
+function pickEveryNthSyllable(n,src){
+  const L=src.length, enough=Math.floor(L/n)>=2; let work=src.slice(), extended=false;
+  if(!enough){ work=src.concat(src); extended=true; }
+  const picked=[], positions=[]; for(let k=1;k<=n;k++){ const pos=n*k; if(pos<=work.length){ picked.push(work[pos-1]); positions.push(pos);} else break; }
+  return {picked,positions,work,extended};
+}
+function postprocessName(p){
+  const L=p.length; if(!L) return p; if(L===2 && p[0]===p[1]) return p;
+  if(L===3){ if(p[0]===p[1] && p[1]!==p[2]) return [p[0],p[2],p[1]]; if(p[1]===p[2] && p[0]!==p[1]) return [p[1],p[0],p[2]]; return p; }
+  const seen=new Set(), u=[]; p.forEach(s=>{ if(!seen.has(s)){ seen.add(s); u.push(s);} }); return u.length>=2?u:p;
+}
+function renderSyllableLine(id,arr,picks){ const el=document.getElementById(id); el.innerHTML=arr.map((s,i)=>{const idx=i+1,cls=picks.includes(idx)?'syll pick':'syll'; return `<span class="${cls}">${idx}.${s}</span>`;}).join("  "); }
+function renderTermaTable(codes){
+  const box=document.getElementById("termaTable");
+  const rows=termas.map((t,i)=>{ const c=codes[i]; const name=c?(codeToGlyphName.get(c)||"—"):"—"; return `<tr><td>${t.title}</td><td>${t.desc}</td><td>${name}</td></tr>`; }).join("");
+  box.innerHTML=`<table><thead><tr><th>Терма</th><th>Определение</th><th>Тэттраглиф</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+function renderParticlesCards(syllables){
+  const box=document.getElementById("particlesOut"), err=document.getElementById("particlesErr"); err.textContent="";
+  if(!syllables||!syllables.length){ box.innerHTML=""; return; }
+  box.innerHTML = syllables.map(s=>{ const p=particlesMap[s];
+    return p ? `<div class="card">${p.img?`<img src="${p.img}" alt="${p.title||s}" loading="lazy">`:""}<div class="title">${p.title||s}</div><div class="desc">${p.desc||""}</div></div>`
+             : `<div class="card"><div class="title">${s}</div><div class="note">Данных пока нет. Добавьте запись для этого слога в particles.json.</div></div>`;
+  }).join("");
+}
+function copyName(){
+  const txt=document.getElementById("nameOut").textContent.replace("Имя печати: ","").trim();
+  if(!txt||txt==="—") return;
+  navigator.clipboard.writeText(txt).then(()=>{ const toast=document.getElementById("copyToast"); toast.classList.add("show"); setTimeout(()=>toast.classList.remove("show"),1300); });
+}
 
-    const sel = document.createElement("select");
-    sel.id = `terma-${i+1}`;
-    const ph = document.createElement("option");
-    ph.value = "";
-    ph.textContent = "— выберите тэттраглиф —";
-    ph.disabled = true; ph.selected = true;
-    sel.appendChild(ph);
-
-    glyphs.forEach(([name, code])=>{
-      const opt = document.createElement("option");
-      opt.value = code;
-      opt.textContent = `${name} (${code})`;
-      sel.appendChild(opt);
+/* анти-дубликат */
+function getSelectedCodes(){ return Array.from(document.querySelectorAll("#selectors select")).map(s=>s.value).filter(v=>v!==""); }
+function updateOptionLocks(){
+  const selected=getSelectedCodes(); const selects=document.querySelectorAll("#selectors select");
+  selects.forEach(sel=>{
+    const current=sel.value;
+    Array.from(sel.options).forEach(opt=>{
+      if(opt.value===""){ opt.disabled=true; return; }
+      opt.disabled = selected.includes(opt.value) && opt.value!==current;
     });
-
-    row.appendChild(t);
-    row.appendChild(d);
-    row.appendChild(sel);
-    container.appendChild(row);
-  }
-}
-
-/* Вспомогательная карта: код -> имя глифа */
-const codeToGlyphName = new Map(glyphs.map(([name, code]) => [code, name]));
-
-function reduceCode(sum){
-  while (sum > 10) sum = sum.toString().split("").reduce((a,b)=>a + Number(b), 0);
-  if (sum === 1) sum = 10;
-  return sum;
-}
-
-function getSourceSyllables(codes){
-  const byCode = new Map(glyphs.map(([name, code, syll]) => [code, syll]));
-  const seq = [];
-  codes.forEach(c => { const s = byCode.get(c); if (s) seq.push(...s); });
-  return seq;
-}
-
-/* Логика выбора n‑х слогов (с полным удвоением при необходимости) */
-function pickEveryNthSyllable(n, src){
-  const L = src.length;
-  const enoughForTwo = Math.floor(L / n) >= 2;
-  let work = src.slice();
-  let extended = false;
-
-  if (!enoughForTwo) {
-    work = src.concat(src);   // строго полное удвоение
-    extended = true;
-  }
-
-  const maxIndex = work.length;
-  const picked = [];
-  const positions = [];
-
-  for (let k = 1; k <= n; k++) {
-    const pos = n * k;
-    if (pos <= maxIndex) {
-      picked.push(work[pos - 1]);
-      positions.push(pos);
-    } else {
-      break;
-    }
-  }
-  return { picked, positions, work, extended };
-}
-
-/* Пост-обработка имени */
-function postprocessName(picked){
-  const L = picked.length;
-  if (L === 0) return picked;
-  if (L === 2 && picked[0] === picked[1]) return picked;
-  if (L === 3) {
-    if (picked[0] === picked[1] && picked[1] !== picked[2]) return [picked[0], picked[2], picked[1]];
-    if (picked[1] === picked[2] && picked[0] !== picked[1]) return [picked[1], picked[0], picked[2]];
-    return picked;
-  }
-  const seen = new Set();
-  const unique = [];
-  picked.forEach(s => { if (!seen.has(s)) { seen.add(s); unique.push(s); } });
-  if (unique.length >= 2) return unique;
-  return picked;
-}
-
-/* Строки со слогами + подсветка выбранных позиций */
-function renderSyllableLine(containerId, syllables, pickedPositions){
-  const el = document.getElementById(containerId);
-  const html = syllables.map((s, i) => {
-    const idx = i + 1;
-    const cls = pickedPositions.includes(idx) ? 'syll pick' : 'syll';
-    return `<span class="${cls}">${idx}.${s}</span>`;
-  }).join("  ");
-  el.innerHTML = html;
-}
-
-/* Карточки тэттрачастиц для слогов итогового имени */
-function renderParticlesCards(syllables) {
-  const box = document.getElementById("particlesOut");
-  const err = document.getElementById("particlesErr");
-  err.textContent = "";
-
-  if (!syllables || !syllables.length) { box.innerHTML = ""; return; }
-
-  const cards = syllables.map(s => {
-    const p = particlesMap[s];
-    if (p) {
-      return `
-        <div class="card">
-          ${p.img ? `<img src="${p.img}" alt="${p.title || s}" loading="lazy">` : ""}
-          <div class="title">${p.title || s}</div>
-          <div class="desc">${p.desc || ""}</div>
-        </div>`;
-    } else {
-      return `
-        <div class="card">
-          <div class="title">${s}</div>
-          <div class="note">Данных пока нет. Добавьте запись для этого слога в particles.json.</div>
-        </div>`;
-    }
-  }).join("");
-
-  box.innerHTML = cards;
-}
-
-/* Таблица: Терма | Определение | Тэттраглиф */
-function renderTermaTable(codes) {
-  const box = document.getElementById("termaTable");
-  const rows = termas.map((t, i) => {
-    const code = codes[i];
-    const glyphName = code ? (codeToGlyphName.get(code) || "—") : "—";
-    return `
-      <tr>
-        <td>${t.title}</td>
-        <td>${t.desc}</td>
-        <td>${glyphName}</td>
-      </tr>`;
-  }).join("");
-  box.innerHTML = `
-    <table>
-      <thead>
-        <tr><th>Терма</th><th>Определение</th><th>Тэттраглиф</th></tr>
-      </thead>
-      <tbody>${rows}</tbody>
-    </table>`;
-}
-
-/* Копирование имени в буфер */
-function copyName() {
-  const nameText = document.getElementById("nameOut").textContent.replace("Имя печати: ", "").trim();
-  if (!nameText || nameText === "—") return;
-  navigator.clipboard.writeText(nameText).then(() => {
-    const toast = document.getElementById("copyToast");
-    toast.classList.add("show");
-    setTimeout(() => toast.classList.remove("show"), 1300);
   });
+}
+function attachGateHandlers(){
+  document.querySelectorAll("#selectors select").forEach(sel=>{
+    sel.addEventListener("change", ()=>{ document.getElementById("dupWarn").textContent=""; updateOptionLocks(); });
+  });
+  updateOptionLocks();
 }
 
 function calculateAll(){
-  // собираем коды выбранных глифов для 6 терм
-  const selects = termas.map((_, i) => document.getElementById(`terma-${i+1}`));
-  const codes = [];
-  let incomplete = false;
-  for (const sel of selects) {
-    const v = parseInt(sel.value, 10);
-    if (isNaN(v)) { incomplete = true; codes.push(null); } else { codes.push(v); }
-  }
+  const selects=termas.map((_,i)=>document.getElementById(`terma-${i+1}`));
+  const codes=[]; let incomplete=false;
+  for(const sel of selects){ const v=parseInt(sel.value,10); if(isNaN(v)){ incomplete=true; codes.push(null);} else { codes.push(v);} }
 
-  // Заполнить таблицу текущим выбором всегда (даже если не всё выбрано)
   renderTermaTable(codes);
 
-  if (incomplete) {
-    document.getElementById("codeOut").textContent = "";
-    document.getElementById("nameOut").textContent = "";
-    document.getElementById("srcSyllables").innerHTML = "";
-    document.getElementById("workSyllables").innerHTML = "";
-    document.getElementById("workDesc").textContent = "";
-    document.getElementById("pickInfo").textContent = "Пожалуйста, выберите тэттраглиф для каждой термы.";
-    document.getElementById("particlesOut").innerHTML = "";
-    document.getElementById("copyBtn").disabled = true;
+  const dupWarn=document.getElementById("dupWarn"); dupWarn.textContent="";
+  const seen=new Map(); let hasDup=false;
+  codes.forEach(c=>{ if(c==null) return; const k=String(c); seen.set(k,(seen.get(k)||0)+1); });
+  for(const [k,cnt] of seen.entries()){ if(cnt>1){ hasDup=true; break; } }
+
+  if(incomplete || hasDup){
+    document.getElementById("codeOut").textContent="";
+    document.getElementById("nameOut").textContent="";
+    document.getElementById("srcSyllables").innerHTML="";
+    document.getElementById("workSyllables").innerHTML="";
+    document.getElementById("workDesc").textContent="";
+    document.getElementById("pickInfo").textContent = hasDup ? "Обнаружены дубликаты выбора." : "Пожалуйста, выберите тэттраглиф для всех терм.";
+    document.getElementById("particlesOut").innerHTML="";
+    document.getElementById("copyBtn").disabled=true;
     return;
   }
 
-  // 1) Финальный числовой код
-  const sum = codes.reduce((a,b)=>a + (b||0), 0);
-  const n = reduceCode(sum);
-
-  // 2) Исходная строка
-  const src = getSourceSyllables(codes);
+  const sum=codes.reduce((a,b)=>a+(b||0),0), n=reduceCode(sum);
+  const src=getSourceSyllables(codes);
   renderSyllableLine("srcSyllables", src, []);
+  const {picked,positions,work,extended}=pickEveryNthSyllable(n,src);
+  const finalNameParts=postprocessName(picked);
 
-  // 3) Выбор по логике «полное удвоение при необходимости»
-  const { picked, positions, work, extended } = pickEveryNthSyllable(n, src);
-
-  // 4) Пост-обработка имени
-  const finalNameParts = postprocessName(picked);
-
-  // 5) Выводы
-  document.getElementById("codeOut").textContent = `Финальный числовой код: ${n}`;
-  document.getElementById("workDesc").textContent = extended
-    ? "Рабочая строка (удлинена полным повтором исходной строки для выбора как минимум двух слогов)"
-    : "Рабочая строка (удлинение не потребовалось)";
+  document.getElementById("codeOut").textContent=`Финальный числовой код: ${n}`;
+  document.getElementById("workDesc").textContent=extended?"Рабочая строка (удлинена полным повтором исходной строки для выбора как минимум двух слогов)":"Рабочая строка (удлинение не потребовалось)";
   renderSyllableLine("workSyllables", work, positions);
 
-  let info = positions.length
-    ? `Выбранные позиции: ${positions.join(", ")} (каждый ${n}-й слог). `
-    : `Нет доступных позиций, кратных ${n}, в рабочей строке. `;
-  if (positions.length >= 2) {
-    info += "Выбор слогов завершён: набрано два или более слогов, как предусмотрено в правилах формирования имени печати.";
-  }
+  let info = positions.length ? `Выбранные позиции: ${positions.join(", ")} (каждый ${n}-й слог). ` : `Нет доступных позиций, кратных ${n}, в рабочей строке. `;
+  if (positions.length>=2) info += "Выбор слогов завершён: набрано два или более слогов, как предусмотрено в правилах формирования имени печати.";
   document.getElementById("pickInfo").textContent = info;
 
-  const finalName = finalNameParts.join(" ") || "—";
-  document.getElementById("nameOut").textContent = `Имя печати: ${finalName}`;
-  document.getElementById("copyBtn").disabled = (finalName === "—");
+  const finalName=finalNameParts.join(" ")||"—";
+  document.getElementById("nameOut").textContent=`Имя печати: ${finalName}`;
+  document.getElementById("copyBtn").disabled=(finalName==="—");
 
-  // 6) Карточки тэттрачастиц
   renderParticlesCards(finalNameParts);
 }
 
-renderGlyphSelectors();
+renderSelectors();
 </script>
 </body>
 </html>
