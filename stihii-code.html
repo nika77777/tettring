@@ -38,7 +38,7 @@
 
 <div class="btn-row inline">
   <button onclick="calculateAll()">Рассчитать код и имя</button>
-  <label for="participantName" class="muted">Имя участника:</label>
+  <label for="participantName" class="muted">Имя практика:</label>
   <input id="participantName" type="text" placeholder="Введите имя" style="min-width: 220px;">
   <button id="copyResultsBtn"  onclick="copyResults()"        disabled>Скопировать результаты</button>
   <button id="downloadTxtBtn"  onclick="downloadResultsTxt()" disabled>Скачать .txt</button>
@@ -204,11 +204,11 @@ function copyResults(){
   navigator.clipboard.writeText(full).then(()=>showToast("copyToast"));
 }
 
-/* скачивание .txt (имя файла = <участник>-<имя_печати>.txt) */
+/* скачивание .txt (имя файла = <практик>-<имя_печати>.txt) */
 function downloadResultsTxt(){
   const p = buildResultsPayload(); if (!p) return;
 
-  const participantRaw = (document.getElementById("participantName").value || "").trim() || "участник";
+  const participantRaw = (document.getElementById("participantName").value || "").trim() || "практик";
   // безопасное имя файла: разрешаем латиницу, кириллицу, цифры, _, -, заменяем остальное на _
   const safe = s => s
     .replace(/\s+/g, "_")
@@ -219,7 +219,7 @@ function downloadResultsTxt(){
   const sealName = p.nameText.replace("Имя печати: ","").trim() || "печать";
   const fileName = `${safe(participantRaw)}-${safe(sealName)}.txt`;
 
-  const content = `${p.nameText}\nУчастник: ${participantRaw}\n\n${p.tsv}\n\n${p.particlesLines}\n`;
+  const content = `${p.nameText}\nПрактик: ${participantRaw}\n\n${p.tsv}\n\n${p.particlesLines}\n`;
   const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
   const url  = URL.createObjectURL(blob);
   const a    = document.createElement("a");
