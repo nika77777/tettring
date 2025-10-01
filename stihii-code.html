@@ -6,7 +6,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
   body { font-family: sans-serif; max-width: 980px; margin: auto; padding: 20px; }
-  select, button { font-size: 1em; margin: 6px 0; padding: 6px; }
+  select, button, input { font-size: 1em; margin: 6px 0; padding: 6px; }
   .label { font-weight: 700; margin-top: 12px; }
   .row { margin: 10px 0 16px; padding: 10px; border: 1px solid #eee; border-radius: 10px; background: #fafafa; }
   .row-title { font-size: 1.02em; }
@@ -28,6 +28,7 @@
   .card .title { font-weight: 700; margin-top: 8px; }
   .card .desc { color: #444; font-size: 0.95em; margin-top: 6px; white-space: pre-line; }
   .card .note { color: #777; font-size: 0.9em; margin-top: 6px; }
+  .inline { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 </style>
 </head>
 <body>
@@ -35,13 +36,14 @@
 
 <div id="selectors"></div>
 
-<div class="btn-row">
+<div class="btn-row inline">
   <button onclick="calculateAll()">Рассчитать код и имя</button>
+  <label for="participantName" class="muted">Имя участника:</label>
+  <input id="participantName" type="text" placeholder="Введите имя" style="min-width: 220px;">
   <button id="copyResultsBtn"  onclick="copyResults()"        disabled>Скопировать результаты</button>
-  <button id="copyMarkdownBtn" onclick="copyResultsMarkdown()" disabled>Copy as Markdown</button>
-  <button id="downloadTxtBtn"  onclick="downloadResults('txt')" disabled>Download .txt</button>
-  <button id="downloadCsvBtn"  onclick="downloadResults('csv')" disabled>Download .csv</button>
+  <button id="downloadTxtBtn"  onclick="downloadResultsTxt()" disabled>Скачать .txt</button>
   <span id="copyToast" class="toast">Скопировано</span>
+  <span id="downloadToast" class="toast">Скачано</span>
 </div>
 
 <div id="dupWarn" class="error"></div>
@@ -99,7 +101,7 @@ const glyphs = [
 const codeToGlyphName = new Map(glyphs.map(([n,c])=>[c,n]));
 const codeToSyllables = new Map(glyphs.map(([n,c,s])=>[c,s]));
 
-/* 7 названий врат (рендерим как <b>Врата №X</b>: Название) */
+/* имена врат (Врата №X — жирным, имя — обычным) */
 const GATE_NAMES = [
   "Глиф-Маяк",
   "Земля (Энергетический уровень: Зерно-Род; Сознательный уровень: Замысел)",
@@ -140,15 +142,13 @@ function postprocessName(p){
   const seen=new Set(), u=[]; p.forEach(s=>{ if(!seen.has(s)){seen.add(s); u.push(s);} }); return u.length>=2?u:p;
 }
 
-/* строки со слогами */
+/* визуализация */
 function renderSyllableLine(id, arr, picks){
   document.getElementById(id).innerHTML=arr.map((s,i)=>{
     const idx=i+1, cls=picks.includes(idx)?'syll pick':'syll';
     return `<span class="${cls}">${idx}.${s}</span>`;
   }).join("  ");
 }
-
-/* таблица (жирное «Врата №X», далее — имя врат) */
 function renderGatesTable(codes){
   const rows=codes.map((code,i)=>{
     const name=code?(codeToGlyphName.get(code)||"—"):"—";
@@ -162,8 +162,6 @@ function renderGatesTable(codes){
   document.getElementById("gatesTable").innerHTML=
     `<table><thead><tr><th>Врата</th><th>Тэттраглиф</th><th>Слоги</th></tr></thead><tbody>${rows}</tbody></table>`;
 }
-
-/* карточки тэттра-частиц */
 function renderParticlesCards(syllables){
   const box=document.getElementById("particlesOut"), err=document.getElementById("particlesErr"); err.textContent="";
   if(!syllables||!syllables.length){ box.innerHTML=""; return; }
@@ -175,10 +173,10 @@ function renderParticlesCards(syllables){
   }).join("");
 }
 
-/* тост */
-function toast(){ const t=document.getElementById("copyToast"); t.classList.add("show"); setTimeout(()=>t.classList.remove("show"),1300); }
+/* уведомления */
+function showToast(id){ const t=document.getElementById(id); t.classList.add("show"); setTimeout(()=>t.classList.remove("show"),1300); }
 
-/* — построение полезной «нагрузки» результатов (имя + TSV + частицы) — */
+/* сбор полезной нагрузки (имя + TSV + частицы) */
 function buildResultsPayload() {
   const nameText = document.getElementById("nameOut").textContent.trim();
   if (!nameText || nameText === "Имя печати: —") return null;
@@ -199,65 +197,37 @@ function buildResultsPayload() {
   return { nameText, tsv, particlesLines, syllables };
 }
 
-/* «Скопировать результаты» — имя + TSV-таблица + частицы */
+/* копирование результатов (имя + TSV + частицы) */
 function copyResults(){
   const p = buildResultsPayload(); if (!p) return;
   const full = `${p.nameText}\n\n${p.tsv}\n\n${p.particlesLines}`;
-  navigator.clipboard.writeText(full).then(toast);
+  navigator.clipboard.writeText(full).then(()=>showToast("copyToast"));
 }
 
-/* Copy as Markdown (красивая таблица и список) */
-function copyResultsMarkdown(){
-  const p = buildResultsPayload(); if (!p) return;
-  const lines = p.tsv.split("\n").map(l => l.split("\t"));
-  const mdHeader = `| ${lines[0].join(" | ")} |`;
-  const mdSep    = `| ${lines[0].map(()=>"-").join(" | ")} |`;
-  const mdRows   = lines.slice(1).map(r => `| ${r.join(" | ")} |`).join("\n");
-  const mdTable  = `${mdHeader}\n${mdSep}\n${mdRows}`;
-  const mdParticles = p.particlesLines.split("\n").map(l => `- ${l}`).join("\n");
-
-  const md = [
-    `# ${p.nameText.replace("Имя печати: ","Имя печати: ")}`,
-    "",
-    "## Врата / Тэттраглиф / Слоги",
-    mdTable,
-    "",
-    "## Тэттра-частицы (имя → значение)",
-    mdParticles
-  ].join("\n");
-
-  navigator.clipboard.writeText(md).then(toast);
-}
-
-/* Download .txt / .csv */
-function downloadResults(kind){
+/* скачивание .txt (имя файла = <участник>-<имя_печати>.txt) */
+function downloadResultsTxt(){
   const p = buildResultsPayload(); if (!p) return;
 
-  let content = "", filename = "";
-  if (kind === "txt") {
-    content = `${p.nameText}\n\n${p.tsv}\n\n${p.particlesLines}\n`;
-    filename = "stihii-results.txt";
-  } else if (kind === "csv") {
-    const csvLines = p.tsv.split("\n").map(row =>
-      row.split("\t").map(cell => `"${cell.replace(/"/g,'""')}"`).join(",")
-    ).join("\n");
-    const particlesCsv = "Слог,Значение\n" + p.particlesLines
-      .split("\n")
-      .map(line => {
-        const [k, v=""] = line.split(" → ");
-        return `"${(k||"").replace(/"/g,'""')}","${(v||"").replace(/"/g,'""')}"`;
-      }).join("\n");
-    content = `${p.nameText}\n\n${csvLines}\n\n${particlesCsv}\n`;
-    filename = "stihii-results.csv";
-  } else { return; }
+  const participantRaw = (document.getElementById("participantName").value || "").trim() || "участник";
+  // безопасное имя файла: разрешаем латиницу, кириллицу, цифры, _, -, заменяем остальное на _
+  const safe = s => s
+    .replace(/\s+/g, "_")
+    .replace(/[^A-Za-z0-9_\-\u0400-\u04FF]+/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^_+|_+$/g, "");
 
+  const sealName = p.nameText.replace("Имя печати: ","").trim() || "печать";
+  const fileName = `${safe(participantRaw)}-${safe(sealName)}.txt`;
+
+  const content = `${p.nameText}\nУчастник: ${participantRaw}\n\n${p.tsv}\n\n${p.particlesLines}\n`;
   const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
   const url  = URL.createObjectURL(blob);
   const a    = document.createElement("a");
-  a.href = url; a.download = filename;
+  a.href = url; a.download = fileName;
   document.body.appendChild(a);
-  a.click(); a.remove(); URL.revokeObjectURL(url);
-  toast();
+  a.click(); a.remove();
+  URL.revokeObjectURL(url);
+  showToast("downloadToast"); // показываем «Скачано»
 }
 
 /* анти-дубликат */
@@ -304,9 +274,7 @@ function calculateAll(){
     document.getElementById("pickInfo").textContent=msg||"";
     document.getElementById("particlesOut").innerHTML="";
     document.getElementById("copyResultsBtn").disabled=true;
-    document.getElementById("copyMarkdownBtn").disabled=true;
     document.getElementById("downloadTxtBtn").disabled=true;
-    document.getElementById("downloadCsvBtn").disabled=true;
   };
 
   if(hasDup){ dupWarn.textContent="Нельзя выбирать одинаковые тэттраглифы для разных врат."; disableOutputs("Обнаружены дубликаты выбора."); return; }
@@ -333,9 +301,7 @@ function calculateAll(){
 
   const canCopy = finalName !== "—";
   document.getElementById("copyResultsBtn").disabled  = !canCopy;
-  document.getElementById("copyMarkdownBtn").disabled = !canCopy;
   document.getElementById("downloadTxtBtn").disabled  = !canCopy;
-  document.getElementById("downloadCsvBtn").disabled  = !canCopy;
 
   renderParticlesCards(finalNameParts);
 }
