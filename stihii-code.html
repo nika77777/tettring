@@ -37,7 +37,10 @@
 
 <div class="btn-row">
   <button onclick="calculateAll()">Рассчитать код и имя</button>
-  <button id="copyResultsBtn" onclick="copyResults()" disabled>Скопировать результаты</button>
+  <button id="copyResultsBtn"  onclick="copyResults()"        disabled>Скопировать результаты</button>
+  <button id="copyMarkdownBtn" onclick="copyResultsMarkdown()" disabled>Copy as Markdown</button>
+  <button id="downloadTxtBtn"  onclick="downloadResults('txt')" disabled>Download .txt</button>
+  <button id="downloadCsvBtn"  onclick="downloadResults('csv')" disabled>Download .csv</button>
   <span id="copyToast" class="toast">Скопировано</span>
 </div>
 
@@ -96,7 +99,7 @@ const glyphs = [
 const codeToGlyphName = new Map(glyphs.map(([n,c])=>[c,n]));
 const codeToSyllables = new Map(glyphs.map(([n,c,s])=>[c,s]));
 
-/* 7 названий врат (без префикса — будем форматировать <b>Врата №X</b>: …) */
+/* 7 названий врат (рендерим как <b>Врата №X</b>: Название) */
 const GATE_NAMES = [
   "Глиф-Маяк",
   "Земля (Энергетический уровень: Зерно-Род; Сознательный уровень: Замысел)",
@@ -137,7 +140,7 @@ function postprocessName(p){
   const seen=new Set(), u=[]; p.forEach(s=>{ if(!seen.has(s)){seen.add(s); u.push(s);} }); return u.length>=2?u:p;
 }
 
-/* визуализация строк */
+/* строки со слогами */
 function renderSyllableLine(id, arr, picks){
   document.getElementById(id).innerHTML=arr.map((s,i)=>{
     const idx=i+1, cls=picks.includes(idx)?'syll pick':'syll';
@@ -145,7 +148,7 @@ function renderSyllableLine(id, arr, picks){
   }).join("  ");
 }
 
-/* таблица (жирное «Врата №X», далее — имя врат обычным) */
+/* таблица (жирное «Врата №X», далее — имя врат) */
 function renderGatesTable(codes){
   const rows=codes.map((code,i)=>{
     const name=code?(codeToGlyphName.get(code)||"—"):"—";
@@ -175,28 +178,86 @@ function renderParticlesCards(syllables){
 /* тост */
 function toast(){ const t=document.getElementById("copyToast"); t.classList.add("show"); setTimeout(()=>t.classList.remove("show"),1300); }
 
-/* «Скопировать результаты»: имя печати + таблица (TSV) + тэттра-частицы (Слог → Значение) */
-function copyResults(){
-  const nameText=document.getElementById("nameOut").textContent.trim();
-  if(!nameText||nameText==="Имя печати: —") return;
+/* — построение полезной «нагрузки» результатов (имя + TSV + частицы) — */
+function buildResultsPayload() {
+  const nameText = document.getElementById("nameOut").textContent.trim();
+  if (!nameText || nameText === "Имя печати: —") return null;
 
-  // Таблица
-  const rows=[...document.querySelectorAll("#gatesTable tbody tr")].map(tr =>
+  const rows = [...document.querySelectorAll("#gatesTable tbody tr")].map(tr =>
     [...tr.querySelectorAll("td")].map(td => td.textContent.trim())
   );
-  const header=["Врата","Тэттраглиф","Слоги"];
-  const tsv=[header,...rows].map(r=>r.join("\t")).join("\n");
+  const header = ["Врата","Тэттраглиф","Слоги"];
+  const tsv = [header, ...rows].map(r => r.join("\t")).join("\n");
 
-  // Тэттра-частицы
-  const syllables=nameText.replace("Имя печати: ","").split(/\s+/).filter(Boolean);
-  const particlesLines = syllables.map(s=>{
-    const d=particlesMap[s];
-    const desc=d?.desc ? d.desc.trim() : "(нет описания)";
+  const syllables = nameText.replace("Имя печати: ","").split(/\s+/).filter(Boolean);
+  const particlesLines = syllables.map(s => {
+    const d = particlesMap[s];
+    const desc = d?.desc ? d.desc.trim() : "(нет описания)";
     return `${s} → ${desc}`;
   }).join("\n");
 
-  const full=`${nameText}\n\n${tsv}\n\n${particlesLines}`;
+  return { nameText, tsv, particlesLines, syllables };
+}
+
+/* «Скопировать результаты» — имя + TSV-таблица + частицы */
+function copyResults(){
+  const p = buildResultsPayload(); if (!p) return;
+  const full = `${p.nameText}\n\n${p.tsv}\n\n${p.particlesLines}`;
   navigator.clipboard.writeText(full).then(toast);
+}
+
+/* Copy as Markdown (красивая таблица и список) */
+function copyResultsMarkdown(){
+  const p = buildResultsPayload(); if (!p) return;
+  const lines = p.tsv.split("\n").map(l => l.split("\t"));
+  const mdHeader = `| ${lines[0].join(" | ")} |`;
+  const mdSep    = `| ${lines[0].map(()=>"-").join(" | ")} |`;
+  const mdRows   = lines.slice(1).map(r => `| ${r.join(" | ")} |`).join("\n");
+  const mdTable  = `${mdHeader}\n${mdSep}\n${mdRows}`;
+  const mdParticles = p.particlesLines.split("\n").map(l => `- ${l}`).join("\n");
+
+  const md = [
+    `# ${p.nameText.replace("Имя печати: ","Имя печати: ")}`,
+    "",
+    "## Врата / Тэттраглиф / Слоги",
+    mdTable,
+    "",
+    "## Тэттра-частицы (имя → значение)",
+    mdParticles
+  ].join("\n");
+
+  navigator.clipboard.writeText(md).then(toast);
+}
+
+/* Download .txt / .csv */
+function downloadResults(kind){
+  const p = buildResultsPayload(); if (!p) return;
+
+  let content = "", filename = "";
+  if (kind === "txt") {
+    content = `${p.nameText}\n\n${p.tsv}\n\n${p.particlesLines}\n`;
+    filename = "stihii-results.txt";
+  } else if (kind === "csv") {
+    const csvLines = p.tsv.split("\n").map(row =>
+      row.split("\t").map(cell => `"${cell.replace(/"/g,'""')}"`).join(",")
+    ).join("\n");
+    const particlesCsv = "Слог,Значение\n" + p.particlesLines
+      .split("\n")
+      .map(line => {
+        const [k, v=""] = line.split(" → ");
+        return `"${(k||"").replace(/"/g,'""')}","${(v||"").replace(/"/g,'""')}"`;
+      }).join("\n");
+    content = `${p.nameText}\n\n${csvLines}\n\n${particlesCsv}\n`;
+    filename = "stihii-results.csv";
+  } else { return; }
+
+  const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement("a");
+  a.href = url; a.download = filename;
+  document.body.appendChild(a);
+  a.click(); a.remove(); URL.revokeObjectURL(url);
+  toast();
 }
 
 /* анти-дубликат */
@@ -233,7 +294,7 @@ function calculateAll(){
   codes.forEach(c=>{ if(c==null) return; const k=String(c); counts.set(k,(counts.get(k)||0)+1); });
   for(const [,cnt] of counts){ if(cnt>1){ hasDup=true; break; } }
 
-  // функция отключения вывода
+  // отключение вывода при ошибках
   const disableOutputs=(msg)=>{
     document.getElementById("codeOut").textContent="";
     document.getElementById("nameOut").textContent="";
@@ -243,6 +304,9 @@ function calculateAll(){
     document.getElementById("pickInfo").textContent=msg||"";
     document.getElementById("particlesOut").innerHTML="";
     document.getElementById("copyResultsBtn").disabled=true;
+    document.getElementById("copyMarkdownBtn").disabled=true;
+    document.getElementById("downloadTxtBtn").disabled=true;
+    document.getElementById("downloadCsvBtn").disabled=true;
   };
 
   if(hasDup){ dupWarn.textContent="Нельзя выбирать одинаковые тэттраглифы для разных врат."; disableOutputs("Обнаружены дубликаты выбора."); return; }
@@ -266,7 +330,12 @@ function calculateAll(){
 
   const finalName=finalNameParts.join(" ")||"—";
   document.getElementById("nameOut").textContent=`Имя печати: ${finalName}`;
-  document.getElementById("copyResultsBtn").disabled=(finalName==="—");
+
+  const canCopy = finalName !== "—";
+  document.getElementById("copyResultsBtn").disabled  = !canCopy;
+  document.getElementById("copyMarkdownBtn").disabled = !canCopy;
+  document.getElementById("downloadTxtBtn").disabled  = !canCopy;
+  document.getElementById("downloadCsvBtn").disabled  = !canCopy;
 
   renderParticlesCards(finalNameParts);
 }
