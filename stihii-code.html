@@ -9,7 +9,7 @@
   select, button { font-size: 1em; margin: 6px 0; padding: 6px; }
   .label { font-weight: 700; margin-top: 12px; }
   .row { margin: 10px 0 16px; padding: 10px; border: 1px solid #eee; border-radius: 10px; background: #fafafa; }
-  .row-title { font-weight: 700; }
+  .row-title { font-size: 1.02em; }
   .result { margin-top: 16px; font-weight: 700; font-size: 1.1em; }
   .mono { font-family: ui-monospace, Menlo, Consolas, monospace; line-height: 1.7; }
   .muted { color: #555; font-size: 0.95em; }
@@ -62,14 +62,14 @@
 <div id="particlesErr" class="muted error"></div>
 
 <script>
-/* particles.json (слог → картинка+описание) */
+/* particles.json */
 let particlesMap = {};
 fetch("particles.json")
   .then(r => { if (!r.ok) throw new Error(); return r.json(); })
   .then(d => { particlesMap = d; })
   .catch(() => { particlesMap = {}; document.getElementById("particlesErr").textContent = "Не удалось загрузить particles.json."; });
 
-/* 21 тэттраглиф */
+/* тэттраглифы */
 const glyphs = [
   ["Эль Аталар", 1, ["Ата","Лар"]],
   ["Эль Ви-Шах", 2, ["Ви","Шах"]],
@@ -96,22 +96,23 @@ const glyphs = [
 const codeToGlyphName = new Map(glyphs.map(([n,c])=>[c,n]));
 const codeToSyllables = new Map(glyphs.map(([n,c,s])=>[c,s]));
 
-/* 7 врат (с № и нумерацией с нуля) */
-const GATES = [
-  "Врата №0: Глиф-Маяк",
-  "Врата №1: Земля (Энергетический уровень: Зерно-Род; Сознательный уровень: Замысел)",
-  "Врата №2: Огонь (Энергетический уровень: Вдохновение; Сознательный уровень: Воля)",
-  "Врата №3: Плазма (Энергетический уровень: Любовь; Сознательный уровень: Магия)",
-  "Врата №4: Воздух (Энергетический уровень: Обмен; Сознательный уровень: Промысел)",
-  "Врата №5: Вода (Энергетический уровень: Поток; Сознательный уровень: Сценарий)",
-  "Врата №6: Пустотность (Энергетический уровень: Тайна; Сознательный уровень: Автор)"
+/* 7 названий врат (без префикса — будем форматировать <b>Врата №X</b>: …) */
+const GATE_NAMES = [
+  "Глиф-Маяк",
+  "Земля (Энергетический уровень: Зерно-Род; Сознательный уровень: Замысел)",
+  "Огонь (Энергетический уровень: Вдохновение; Сознательный уровень: Воля)",
+  "Плазма (Энергетический уровень: Любовь; Сознательный уровень: Магия)",
+  "Воздух (Энергетический уровень: Обмен; Сознательный уровень: Промысел)",
+  "Вода (Энергетический уровень: Поток; Сознательный уровень: Сценарий)",
+  "Пустотность (Энергетический уровень: Тайна; Сознательный уровень: Автор)"
 ];
 
 function renderSelectors(){
   const c=document.getElementById("selectors"); c.innerHTML="";
-  for(let i=0;i<GATES.length;i++){
+  for(let i=0;i<GATE_NAMES.length;i++){
     const row=document.createElement("div"); row.className="row";
-    const title=document.createElement("div"); title.className="row-title"; title.textContent=GATES[i];
+    const title=document.createElement("div"); title.className="row-title";
+    title.innerHTML = `<b>Врата №${i}</b>: ${GATE_NAMES[i]}`;
     const sel=document.createElement("select"); sel.id=`gate-${i}`;
     const ph=document.createElement("option"); ph.value=""; ph.textContent="— выберите тэттраглиф —"; ph.disabled=true; ph.selected=true; sel.appendChild(ph);
     glyphs.forEach(([name,code])=>{ const opt=document.createElement("option"); opt.value=code; opt.textContent=`${name} (${code})`; sel.appendChild(opt); });
@@ -120,56 +121,153 @@ function renderSelectors(){
   attachGateHandlers();
 }
 
-/* — вспомогательные функции расчёта, проверки и визуализации (как в предыдущей версии) — */
+/* расчёты */
 function reduceCode(sum){ while(sum>10) sum=sum.toString().split("").reduce((a,b)=>a+Number(b),0); if(sum===1) sum=10; return sum; }
 function getSourceSyllables(codes){ const out=[]; codes.forEach(c=>{ const s=codeToSyllables.get(c); if(s) out.push(...s); }); return out; }
-function pickEveryNthSyllable(n, src){ const L=src.length; let work=src.slice(), extended=false; if(Math.floor(L/n)<2){ work=src.concat(src); extended=true;} const picked=[], positions=[]; for(let k=1;k<=n;k++){ const pos=n*k; if(pos<=work.length){ picked.push(work[pos-1]); positions.push(pos);} else break;} return {picked,positions,work,extended}; }
-function postprocessName(p){ const L=p.length; if(!L) return p; if(L===2&&p[0]===p[1]) return p; if(L===3){ if(p[0]===p[1]&&p[1]!==p[2]) return [p[0],p[2],p[1]]; if(p[1]===p[2]&&p[0]!==p[1]) return [p[1],p[0],p[2]]; return p; } const seen=new Set(), u=[]; p.forEach(s=>{ if(!seen.has(s)){seen.add(s); u.push(s);} }); return u.length>=2?u:p; }
-function renderSyllableLine(id, arr, picks){ document.getElementById(id).innerHTML=arr.map((s,i)=>{const idx=i+1,cls=picks.includes(idx)?'syll pick':'syll'; return `<span class="${cls}">${idx}.${s}</span>`;}).join("  "); }
-function renderGatesTable(codes){ const rows=codes.map((code,i)=>{ const name=code?(codeToGlyphName.get(code)||"—"):"—"; const syll=code?(codeToSyllables.get(code)||[]).join(", "):"—"; return `<tr><td>${GATES[i]}</td><td>${name}</td><td>${syll}</td></tr>`; }).join(""); document.getElementById("gatesTable").innerHTML=`<table><thead><tr><th>Врата</th><th>Тэттраглиф</th><th>Слоги</th></tr></thead><tbody>${rows}</tbody></table>`; }
-function renderParticlesCards(syllables){ const box=document.getElementById("particlesOut"), err=document.getElementById("particlesErr"); err.textContent=""; if(!syllables||!syllables.length){ box.innerHTML=""; return; } box.innerHTML=syllables.map(s=>{ const p=particlesMap[s]; return p? `<div class="card">${p.img?`<img src="${p.img}" alt="${p.title||s}" loading="lazy">`:""}<div class="title">${p.title||s}</div><div class="desc">${p.desc||""}</div></div>`:`<div class="card"><div class="title">${s}</div><div class="note">Нет данных для этого слога</div></div>`; }).join(""); }
+function pickEveryNthSyllable(n, src){
+  const L=src.length; let work=src.slice(), extended=false;
+  if(Math.floor(L/n)<2){ work=src.concat(src); extended=true; }
+  const picked=[], positions=[];
+  for(let k=1;k<=n;k++){ const pos=n*k; if(pos<=work.length){ picked.push(work[pos-1]); positions.push(pos);} else break; }
+  return {picked,positions,work,extended};
+}
+function postprocessName(p){
+  const L=p.length; if(!L) return p; if(L===2&&p[0]===p[1]) return p;
+  if(L===3){ if(p[0]===p[1]&&p[1]!==p[2]) return [p[0],p[2],p[1]]; if(p[1]===p[2]&&p[0]!==p[1]) return [p[1],p[0],p[2]]; return p; }
+  const seen=new Set(), u=[]; p.forEach(s=>{ if(!seen.has(s)){seen.add(s); u.push(s);} }); return u.length>=2?u:p;
+}
+
+/* визуализация строк */
+function renderSyllableLine(id, arr, picks){
+  document.getElementById(id).innerHTML=arr.map((s,i)=>{
+    const idx=i+1, cls=picks.includes(idx)?'syll pick':'syll';
+    return `<span class="${cls}">${idx}.${s}</span>`;
+  }).join("  ");
+}
+
+/* таблица (жирное «Врата №X», далее — имя врат обычным) */
+function renderGatesTable(codes){
+  const rows=codes.map((code,i)=>{
+    const name=code?(codeToGlyphName.get(code)||"—"):"—";
+    const syll=code?(codeToSyllables.get(code)||[]).join(", "):"—";
+    return `<tr>
+      <td><b>Врата №${i}</b>: ${GATE_NAMES[i]}</td>
+      <td>${name}</td>
+      <td>${syll}</td>
+    </tr>`;
+  }).join("");
+  document.getElementById("gatesTable").innerHTML=
+    `<table><thead><tr><th>Врата</th><th>Тэттраглиф</th><th>Слоги</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+/* карточки тэттра-частиц */
+function renderParticlesCards(syllables){
+  const box=document.getElementById("particlesOut"), err=document.getElementById("particlesErr"); err.textContent="";
+  if(!syllables||!syllables.length){ box.innerHTML=""; return; }
+  box.innerHTML=syllables.map(s=>{
+    const p=particlesMap[s];
+    return p
+      ? `<div class="card">${p.img?`<img src="${p.img}" alt="${p.title||s}" loading="lazy">`:""}<div class="title">${p.title||s}</div><div class="desc">${p.desc||""}</div></div>`
+      : `<div class="card"><div class="title">${s}</div><div class="note">Нет данных</div></div>`;
+  }).join("");
+}
+
+/* тост */
 function toast(){ const t=document.getElementById("copyToast"); t.classList.add("show"); setTimeout(()=>t.classList.remove("show"),1300); }
 
-/* Копирование всех результатов */
+/* «Скопировать результаты»: имя печати + таблица (TSV) + тэттра-частицы (Слог → Значение) */
 function copyResults(){
   const nameText=document.getElementById("nameOut").textContent.trim();
   if(!nameText||nameText==="Имя печати: —") return;
-  const rows=[...document.querySelectorAll("#gatesTable tbody tr")].map(tr=>[...tr.querySelectorAll("td")].map(td=>td.textContent.trim()));
+
+  // Таблица
+  const rows=[...document.querySelectorAll("#gatesTable tbody tr")].map(tr =>
+    [...tr.querySelectorAll("td")].map(td => td.textContent.trim())
+  );
   const header=["Врата","Тэттраглиф","Слоги"];
   const tsv=[header,...rows].map(r=>r.join("\t")).join("\n");
+
+  // Тэттра-частицы
   const syllables=nameText.replace("Имя печати: ","").split(/\s+/).filter(Boolean);
-  const lines=syllables.map(s=>{ const d=particlesMap[s]; const desc=d?.desc? d.desc.trim():"(нет описания)"; return `${s} → ${desc}`; }).join("\n");
-  const full=`${nameText}\n\n${tsv}\n\n${lines}`;
+  const particlesLines = syllables.map(s=>{
+    const d=particlesMap[s];
+    const desc=d?.desc ? d.desc.trim() : "(нет описания)";
+    return `${s} → ${desc}`;
+  }).join("\n");
+
+  const full=`${nameText}\n\n${tsv}\n\n${particlesLines}`;
   navigator.clipboard.writeText(full).then(toast);
 }
 
 /* анти-дубликат */
 function getSelectedCodes(){ return Array.from(document.querySelectorAll("#selectors select")).map(s=>s.value).filter(v=>v!==""); }
-function updateOptionLocks(){ const selected=getSelectedCodes(); document.querySelectorAll("#selectors select").forEach(sel=>{ const current=sel.value; Array.from(sel.options).forEach(opt=>{ if(opt.value===""){ opt.disabled=true; return; } opt.disabled=selected.includes(opt.value)&&opt.value!==current; }); }); }
-function attachGateHandlers(){ document.querySelectorAll("#selectors select").forEach(sel=>{ sel.addEventListener("change", ()=>{ document.getElementById("dupWarn").textContent=""; updateOptionLocks(); }); }); updateOptionLocks(); }
+function updateOptionLocks(){
+  const selected=getSelectedCodes();
+  document.querySelectorAll("#selectors select").forEach(sel=>{
+    const current=sel.value;
+    Array.from(sel.options).forEach(opt=>{
+      if(opt.value===""){ opt.disabled=true; return; }
+      opt.disabled = selected.includes(opt.value) && opt.value!==current;
+    });
+  });
+}
+function attachGateHandlers(){
+  document.querySelectorAll("#selectors select").forEach(sel=>{
+    sel.addEventListener("change", ()=>{ document.getElementById("dupWarn").textContent=""; updateOptionLocks(); });
+  });
+  updateOptionLocks();
+}
 
 /* расчёт */
 function calculateAll(){
-  const selects=GATES.map((_,i)=>document.getElementById(`gate-${i}`));
+  const selects=GATE_NAMES.map((_,i)=>document.getElementById(`gate-${i}`));
   const codes=[]; let incomplete=false;
   for(const sel of selects){ const v=parseInt(sel.value,10); if(isNaN(v)){ incomplete=true; codes.push(null);} else { codes.push(v);} }
+
+  // таблица — всегда по текущему состоянию
   renderGatesTable(codes);
+
+  // проверка дубликатов
   const dupWarn=document.getElementById("dupWarn"); dupWarn.textContent="";
-  const counts=new Map(); let hasDup=false; codes.forEach(c=>{ if(c==null) return; const k=String(c); counts.set(k,(counts.get(k)||0)+1); }); for(const [,cnt] of counts){ if(cnt>1){ hasDup=true; break; } }
-  const disableOutputs=(msg)=>{ document.getElementById("codeOut").textContent=""; document.getElementById("nameOut").textContent=""; document.getElementById("srcSyllables").innerHTML=""; document.getElementById("workSyllables").innerHTML=""; document.getElementById("workDesc").textContent=""; document.getElementById("pickInfo").textContent=msg||""; document.getElementById("particlesOut").innerHTML=""; document.getElementById("copyResultsBtn").disabled=true; };
+  const counts=new Map(); let hasDup=false;
+  codes.forEach(c=>{ if(c==null) return; const k=String(c); counts.set(k,(counts.get(k)||0)+1); });
+  for(const [,cnt] of counts){ if(cnt>1){ hasDup=true; break; } }
+
+  // функция отключения вывода
+  const disableOutputs=(msg)=>{
+    document.getElementById("codeOut").textContent="";
+    document.getElementById("nameOut").textContent="";
+    document.getElementById("srcSyllables").innerHTML="";
+    document.getElementById("workSyllables").innerHTML="";
+    document.getElementById("workDesc").textContent="";
+    document.getElementById("pickInfo").textContent=msg||"";
+    document.getElementById("particlesOut").innerHTML="";
+    document.getElementById("copyResultsBtn").disabled=true;
+  };
+
   if(hasDup){ dupWarn.textContent="Нельзя выбирать одинаковые тэттраглифы для разных врат."; disableOutputs("Обнаружены дубликаты выбора."); return; }
   if(incomplete){ disableOutputs("Пожалуйста, выберите тэттраглиф для всех 7 врат."); return; }
+
+  // расчёт
   const sum=codes.reduce((a,b)=>a+(b||0),0), n=reduceCode(sum);
   const src=getSourceSyllables(codes); renderSyllableLine("srcSyllables", src, []);
   const {picked,positions,work,extended}=pickEveryNthSyllable(n,src);
   const finalNameParts=postprocessName(picked);
+
   document.getElementById("codeOut").textContent=`Финальный числовой код: ${n}`;
   document.getElementById("workDesc").textContent=extended?"Рабочая строка удлинена":"Рабочая строка (удлинение не потребовалось)";
   renderSyllableLine("workSyllables", work, positions);
-  let info=positions.length?`Выбранные позиции: ${positions.join(", ")} (каждый ${n}-й слог). `:`Нет доступных позиций, кратных ${n}, в рабочей строке. `; // if(positions.length>=2) info+="Выбор слогов завершён."; 
+
+  let info=positions.length
+    ? `Выбранные позиции: ${positions.join(", ")} (каждый ${n}-й слог). `
+    : `Нет доступных позиций, кратных ${n}, в рабочей строке. `;
+  if(positions.length>=2) info+="Выбор слогов завершён: набрано два или более слогов, как предусмотрено в правилах формирования имени печати.";
   document.getElementById("pickInfo").textContent=info;
-  const finalName=finalNameParts.join(" ")||"—"; document.getElementById("nameOut").textContent=`Имя печати: ${finalName}`;
+
+  const finalName=finalNameParts.join(" ")||"—";
+  document.getElementById("nameOut").textContent=`Имя печати: ${finalName}`;
   document.getElementById("copyResultsBtn").disabled=(finalName==="—");
+
   renderParticlesCards(finalNameParts);
 }
 
