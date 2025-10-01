@@ -166,7 +166,8 @@ function calculateAll(){
   document.getElementById("codeOut").textContent=`Финальный числовой код: ${n}`;
   document.getElementById("workDesc").textContent=extended?"Рабочая строка удлинена":"Рабочая строка (удлинение не потребовалось)";
   renderSyllableLine("workSyllables", work, positions);
-  let info=positions.length?`Выбранные позиции: ${positions.join(", ")} (каждый ${n}-й слог). `:`Нет доступных позиций, кратных ${n}, в рабочей строке. `; // if(positions.length>=2) info+="Выбор слогов завершён."; document.getElementById("pickInfo").textContent=info;
+  let info=positions.length?`Выбранные позиции: ${positions.join(", ")} (каждый ${n}-й слог). `:`Нет доступных позиций, кратных ${n}, в рабочей строке. `; // if(positions.length>=2) info+="Выбор слогов завершён."; 
+  document.getElementById("pickInfo").textContent=info;
   const finalName=finalNameParts.join(" ")||"—"; document.getElementById("nameOut").textContent=`Имя печати: ${finalName}`;
   document.getElementById("copyResultsBtn").disabled=(finalName==="—");
   renderParticlesCards(finalNameParts);
