@@ -4,19 +4,20 @@
   <meta charset="UTF-8" />
   <title>Калькулятор кода и имени печати</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+
   <style>
     body { font-family: sans-serif; max-width: 980px; margin: auto; padding: 20px; }
     select, button, input { font-size: 1em; margin: 6px 0; padding: 6px; }
-    .label { font-weight: 700; margin-top: 12px; }
-    .row { margin: 10px 0 16px; padding: 10px; border: 1px solid #eee; border-radius: 10px; background: #fafafa; }
-    .row-title { font-size: 1.02em; }
+    .label { font-weight: 700; margin-top: 14px; }
+    .row { margin: 10px 0 16px; padding: 12px; border: 1px solid #eee; border-radius: 10px; background: #fafafa; }
+    .row-title { font-size: 1.02em; font-weight: 700; }
     .row-desc { color: #555; font-size: 0.95em; margin-top: 6px; }
     .result { margin-top: 16px; font-weight: 700; font-size: 1.1em; }
     .mono { font-family: ui-monospace, Menlo, Consolas, monospace; line-height: 1.7; }
     .muted { color: #555; font-size: 0.95em; }
     .syll { display: inline-block; margin-right: 10px; }
     .pick { font-weight: 700; background: #fff3c4; border-radius: 4px; padding: 1px 4px; }
-    .btn-row { display: flex; gap: 10px; align-items: center; margin-top: 10px; flex-wrap: wrap; }
+    .btn-row { display: flex; gap: 10px; align-items: center; margin-top: 12px; flex-wrap: wrap; }
     .toast { font-size: 0.95em; color: #2c6e2f; display: none; }
     .toast.show { display: inline; }
     .error { color:#b00020; margin-top: 6px; }
@@ -28,132 +29,105 @@
 </head>
 
 <body>
-  <h2>Калькулятор кода и имени печати</h2>
-  <div class="muted" style="margin-top:-6px;">
-    Выберите по одному тэттраглифу для каждого врата (минимум 3). Система рассчитает финальный числовой код и имя печати
-    через выбор каждого <span class="mono">n</span>-го слога из общей последовательности слогов.
-  </div>
 
-  <div class="btn-row inline">
-    <label for="numMirrors" class="muted">Количество врат (тэттраглифов):</label>
-    <input id="numMirrors" type="number" min="3" max="60" value="3" style="width: 110px;" />
-    <button onclick="renderSelectors()">Применить</button>
-  </div>
+<h2>Калькулятор кода и имени печати</h2>
+<div class="muted" style="margin-top:-6px;">
+  Выберите по одному тэттраглифу для каждого врата (минимум 3).
+  Финальный числовой код рассчитывается как свёртка суммы кодов,
+  после чего имя печати формируется через выбор каждого <span class="mono">n</span>-го слога.
+</div>
 
-  <div id="selectors"></div>
+<div class="btn-row inline">
+  <label for="numMirrors" class="muted">Количество врат:</label>
+  <input id="numMirrors" type="number" min="3" max="60" value="3" style="width:110px;">
+  <button onclick="renderSelectors()">Применить</button>
+</div>
 
-  <div class="btn-row inline">
-    <button onclick="calculateAll()">Рассчитать код и имя</button>
+<div id="selectors"></div>
 
-    <label for="participantName" class="muted">Имя участника:</label>
-    <input id="participantName" type="text" placeholder="Введите имя" style="min-width: 220px;" />
+<div class="btn-row inline">
+  <button onclick="calculateAll()">Рассчитать код и имя</button>
 
-    <button id="downloadTxtBtn" onclick="downloadResultsTxt()" disabled>Скачать .txt</button>
-    <span id="downloadToast" class="toast">Скачано</span>
-  </div>
+  <label for="participantName" class="muted">Имя участника:</label>
+  <input id="participantName" type="text" placeholder="Введите имя" style="min-width:220px;">
 
-  <div id="dupWarn" class="error"></div>
+  <button id="downloadTxtBtn" onclick="downloadResultsTxt()" disabled>Скачать .txt</button>
+  <span id="downloadToast" class="toast">Скачано</span>
+</div>
 
-  <div class="label">Сводная таблица по вратам</div>
-  <div id="gatesTable"></div>
+<div id="dupWarn" class="error"></div>
 
-  <div class="result" id="codeOut"></div>
-  <div class="result" id="nameOut"></div>
+<div class="label">Сводная таблица по вратам</div>
+<div id="gatesTable"></div>
 
-  <div class="label">Исходная строка слогов:</div>
-  <div id="srcSyllables" class="mono"></div>
+<div class="result" id="codeOut"></div>
+<div id="codeExplain" class="muted"></div>
 
-  <div class="label">Рабочая строка:</div>
-  <div id="workDesc" class="muted"></div>
-  <div id="workSyllables" class="mono"></div>
-  <div id="pickInfo" class="muted"></div>
+<div class="result" id="nameOut"></div>
+
+<div class="label">Исходная строка слогов:</div>
+<div id="srcSyllables" class="mono"></div>
+
+<div class="label">Рабочая строка:</div>
+<div id="workDesc" class="muted"></div>
+<div id="workSyllables" class="mono"></div>
+<div id="pickInfo" class="muted"></div>
 
 <script>
 /* =========================
-   ДАННЫЕ
+   DATA
    ========================= */
 
 const glyphs = [
-  ["Эль Аталар", 1,  ["Ата","Лар"]],
-  ["Эль Ви-Шах", 2, ["Ви","Шах"]],
-  ["Эль Нере-Ар", 3, ["Нере","Ар"]],
-  ["Эль Ви-Нар", 4, ["Ви","Нар"]],
-  ["Эль Эн-Инь-О", 5, ["Эн","Инь","О"]],
-  ["Эль Ра-Дам", 6, ["Ра","Дам"]],
-  ["Эль Муд-Рам", 7, ["Муд","Рам"]],
-  ["Эль Мун-Ио", 8, ["Мун","Ио"]],
-  ["Эль Мар-Кам", 9, ["Мар","Кам"]],
-  ["Эль Рэ-Тан", 10, ["Рэ","Тан"]],
-  ["Эль Ке-Тар", 11, ["Ке","Тар"]],
-  ["Эль Ок-Улос", 12, ["Ок","Улос"]],
-  ["Эль Мана-Рат", 13, ["Мана","Рат"]],
-  ["Эль Хот-Та", 14, ["Хот","Та"]],
-  ["Эль Ле-Дар", 15, ["Ле","Дар"]],
-  ["Эль Аму", 16, ["Эль","Аму"]],
-  ["Эль Прай-Я", 17, ["Прай","Я"]],
-  ["Эль Кар", 18, ["Эль","Кар"]],
-  ["Эль Ошта-Лар", 19, ["Ошта","Лар"]],
-  ["Эль Су-Ни-Я", 20, ["Су","Ни","Я"]],
-  ["Эль Ра", 21, ["Эль","Ра"]],
+  ["Эль Аталар",1,["Ата","Лар"]],
+  ["Эль Ви-Шах",2,["Ви","Шах"]],
+  ["Эль Нере-Ар",3,["Нере","Ар"]],
+  ["Эль Ви-Нар",4,["Ви","Нар"]],
+  ["Эль Эн-Инь-О",5,["Эн","Инь","О"]],
+  ["Эль Ра-Дам",6,["Ра","Дам"]],
+  ["Эль Муд-Рам",7,["Муд","Рам"]],
+  ["Эль Мун-Ио",8,["Мун","Ио"]],
+  ["Эль Мар-Кам",9,["Мар","Кам"]],
+  ["Эль Рэ-Тан",10,["Рэ","Тан"]],
+  ["Эль Ке-Тар",11,["Ке","Тар"]],
+  ["Эль Ок-Улос",12,["Ок","Улос"]],
+  ["Эль Мана-Рат",13,["Мана","Рат"]],
+  ["Эль Хот-Та",14,["Хот","Та"]],
+  ["Эль Ле-Дар",15,["Ле","Дар"]],
+  ["Эль Аму",16,["Эль","Аму"]],
+  ["Эль Прай-Я",17,["Прай","Я"]],
+  ["Эль Кар",18,["Эль","Кар"]],
+  ["Эль Ошта-Лар",19,["Ошта","Лар"]],
+  ["Эль Су-Ни-Я",20,["Су","Ни","Я"]],
+  ["Эль Ра",21,["Эль","Ра"]],
 ];
 
-const codeToGlyphName = new Map(glyphs.map(([n,c]) => [c,n]));
-const codeToSyllables = new Map(glyphs.map(([n,c,s]) => [c,s]));
-
-/* Если хотите — можно показывать «имена 15 зеркал» именно когда выбрано 15 врат.
-   При любом другом количестве — будут обычные «Врата №X». */
-const MIRRORS_15 = [
-  "Зеркало Коммуникации",
-  "Зеркало Видения",
-  "Кристалл Сознания",
-  "Зеркало Бытия",
-  "Зеркало Души",
-  "Зеркало Сознания",
-  "Зеркало Защиты",
-  "Зеркало Реализации",
-  "Зеркало Исцеления",
-  "Зеркало Равновесия",
-  "Зеркало Пророчества",
-  "Зеркало Отображения",
-  "Зеркало Благосостояния",
-  "Зеркало Разума",
-  "Зеркало Активации Храма"
-];
+const codeToGlyphName = new Map(glyphs.map(([n,c])=>[c,n]));
+const codeToSyllables = new Map(glyphs.map(([n,c,s])=>[c,s]));
 
 /* =========================
-   РЕНДЕР СЕЛЕКТОРОВ (карточный интерфейс)
+   RENDER SELECTORS (cards)
    ========================= */
 
-function clampMirrorsCount(v){
-  const n = Number(v);
-  if(!Number.isFinite(n)) return 3;
-  return Math.max(3, Math.min(60, Math.floor(n)));
-}
-
-function getGateTitle(i, total){
-  if(total === 15) return `Врата №${i+1}: ${MIRRORS_15[i] || "—"}`;
-  return `Врата №${i+1}`;
-}
-
-function getGateTableLabel(i, total){
-  if(total === 15) return `<b>Врата №${i+1}</b>: ${MIRRORS_15[i] || "—"}`;
-  return `<b>Врата №${i+1}</b>`;
+function clampMirrors(v){
+  v = Number(v);
+  return Math.max(3, Math.min(60, Math.floor(v || 3)));
 }
 
 function renderSelectors(){
-  const nMirrors = clampMirrorsCount(document.getElementById("numMirrors").value);
-  document.getElementById("numMirrors").value = nMirrors;
+  const total = clampMirrors(numMirrors.value);
+  numMirrors.value = total;
 
-  const c = document.getElementById("selectors");
-  c.innerHTML = "";
+  const box = document.getElementById("selectors");
+  box.innerHTML = "";
 
-  for(let i=0; i<nMirrors; i++){
+  for(let i=0;i<total;i++){
     const row = document.createElement("div");
     row.className = "row";
 
     const title = document.createElement("div");
     title.className = "row-title";
-    title.innerHTML = `<b>${getGateTitle(i, nMirrors)}</b>`;
+    title.textContent = `Врата №${i+1}`;
 
     const desc = document.createElement("div");
     desc.className = "row-desc";
@@ -162,338 +136,204 @@ function renderSelectors(){
     const sel = document.createElement("select");
     sel.id = `gate-${i}`;
 
-    const ph = document.createElement("option");
-    ph.value = "";
-    ph.textContent = "— выберите тэттраглиф —";
+    const ph = new Option("— выберите тэттраглиф —","",true,true);
     ph.disabled = true;
-    ph.selected = true;
-    sel.appendChild(ph);
+    sel.add(ph);
 
-    glyphs.forEach(([name, code]) => {
-      const opt = document.createElement("option");
-      opt.value = code;
-      opt.textContent = `${name} (${code})`;
-      sel.appendChild(opt);
+    glyphs.forEach(([name,code])=>{
+      sel.add(new Option(`${name} (${code})`,code));
     });
 
-    row.appendChild(title);
-    row.appendChild(desc);
-    row.appendChild(sel);
-    c.appendChild(row);
+    row.append(title,desc,sel);
+    box.appendChild(row);
   }
 
   attachGateHandlers();
-  // при изменении количества врат — очищаем вывод (чтобы не было “старых” расчётов)
-  resetOutputs("Изменено количество врат. Выберите тэттраглифы и нажмите «Рассчитать код и имя».");
-  renderGatesTable(Array(nMirrors).fill(null), nMirrors);
+  renderGatesTable(Array(total).fill(null));
+  resetOutputs("Выберите тэттраглифы и нажмите «Рассчитать код и имя».");
 }
 
 /* =========================
-   ВСПОМОГАТЕЛЬНОЕ
+   HELPERS
    ========================= */
 
 function reduceCode(sum){
-  while(sum > 10){
-    sum = sum.toString().split("").reduce((a,b) => a + Number(b), 0);
+  while(sum>10){
+    sum = sum.toString().split("").map(Number).reduce((a,b)=>a+b,0);
   }
-  if(sum === 1) sum = 10;
+  if(sum===1) sum=10;
   return sum;
 }
 
-function getSelectedCodes(){
-  return Array.from(document.querySelectorAll("#selectors select"))
-    .map(s => s.value)
-    .filter(v => v !== "");
-}
-
-function updateOptionLocks(){
-  const selected = getSelectedCodes();
-  document.querySelectorAll("#selectors select").forEach(sel => {
-    const current = sel.value;
-    Array.from(sel.options).forEach(opt => {
-      if(opt.value === ""){
-        opt.disabled = true;
-        return;
-      }
-      opt.disabled = selected.includes(opt.value) && opt.value !== current;
-    });
-  });
+function explainReduction(sum){
+  const steps=[];
+  let cur=sum;
+  while(cur>10){
+    const d=cur.toString().split("").map(Number);
+    steps.push(`${cur} → ${d.join(" + ")} = ${d.reduce((a,b)=>a+b,0)}`);
+    cur=d.reduce((a,b)=>a+b,0);
+  }
+  if(cur===1){
+    steps.push("1 → 10 (по принятому правилу)");
+  }
+  return steps;
 }
 
 function attachGateHandlers(){
-  document.querySelectorAll("#selectors select").forEach(sel => {
-    sel.addEventListener("change", () => {
-      document.getElementById("dupWarn").textContent = "";
-      updateOptionLocks();
-    });
+  document.querySelectorAll("#selectors select").forEach(sel=>{
+    sel.onchange=updateOptionLocks;
   });
   updateOptionLocks();
 }
 
-function getSourceSyllables(codes){
-  const out = [];
-  codes.forEach(code => {
-    const s = codeToSyllables.get(code);
-    if(s) out.push(...s);
+function updateOptionLocks(){
+  const selected=[...document.querySelectorAll("#selectors select")]
+    .map(s=>s.value).filter(Boolean);
+  document.querySelectorAll("#selectors select").forEach(sel=>{
+    [...sel.options].forEach(o=>{
+      if(!o.value) return;
+      o.disabled = selected.includes(o.value) && o.value!==sel.value;
+    });
   });
-  return out;
 }
 
-function renderSyllableLine(id, arr, picks){
-  document.getElementById(id).innerHTML = arr.map((s,i) => {
-    const idx = i + 1;
-    const cls = picks.includes(idx) ? "syll pick" : "syll";
-    return `<span class="${cls}">${idx}.${s}</span>`;
-  }).join("  ");
+function getSourceSyllables(codes){
+  return codes.flatMap(c=>codeToSyllables.get(c)||[]);
 }
 
-function postprocessName(picked){
-  const L = picked.length;
-  if(!L) return picked;
-
-  if(L === 2 && picked[0] === picked[1]) return picked;
-
-  if(L === 3){
-    if(picked[0] === picked[1] && picked[1] !== picked[2]) return [picked[0], picked[2], picked[1]];
-    if(picked[1] === picked[2] && picked[0] !== picked[1]) return [picked[1], picked[0], picked[2]];
-    return picked;
-  }
-
-  const seen = new Set();
-  const uniq = [];
-  picked.forEach(s => { if(!seen.has(s)){ seen.add(s); uniq.push(s); } });
-  return uniq.length >= 2 ? uniq : picked;
+function renderSyllableLine(id,arr,picks){
+  document.getElementById(id).innerHTML=arr.map((s,i)=>{
+    const n=i+1;
+    return `<span class="syll ${picks.includes(n)?"pick":""}">${n}.${s}</span>`;
+  }).join(" ");
 }
 
 /* =========================
-   BUGFIX: удлинение рабочей строки до 2-х позиций (n и 2n)
-   + улучшенный workDesc
+   BUGFIX: extend until >= n and 2n
    ========================= */
 
-function pickEveryNthSyllable(n, src){
-  const L = src.length;
-
-  if(!Array.isArray(src) || L === 0 || !Number.isFinite(n) || n <= 0){
-    return { picked: [], positions: [], work: [], extended: false, repeats: 0 };
-  }
-
-  let work = src.slice();
-  let repeats = 0;
-
-  // Нужно минимум две позиции: n и 2n => floor(work.length / n) >= 2
-  const MAX_REPEATS = 50;
-  while(Math.floor(work.length / n) < 2 && repeats < MAX_REPEATS){
-    work = work.concat(src);
+function pickEveryNthSyllable(n,src){
+  let work=[...src], repeats=0;
+  while(Math.floor(work.length/n)<2 && repeats<50){
+    work=work.concat(src);
     repeats++;
   }
-
-  const picked = [];
-  const positions = [];
-
-  for(let k = 1; ; k++){
-    const pos = n * k;
-    if(pos <= work.length){
-      picked.push(work[pos - 1]);
-      positions.push(pos);
-    } else {
-      break;
-    }
+  const picked=[],pos=[];
+  for(let k=1;;k++){
+    const p=n*k;
+    if(p<=work.length){
+      picked.push(work[p-1]);
+      pos.push(p);
+    } else break;
   }
-
-  return { picked, positions, work, extended: repeats > 0, repeats };
+  return {picked,pos,work,repeats};
 }
 
 /* =========================
-   СВОДНАЯ ТАБЛИЦА
+   TABLE
    ========================= */
 
-function renderGatesTable(codes, total){
-  const rows = codes.map((code, idx) => {
-    const glyphName = code ? (codeToGlyphName.get(code) || "—") : "—";
-    const syll = code ? ((codeToSyllables.get(code) || []).join(", ")) : "—";
-    return `<tr>
-      <td>${getGateTableLabel(idx, total)}</td>
-      <td>${glyphName}</td>
-      <td>${syll}</td>
-    </tr>`;
-  }).join("");
+function renderGatesTable(codes){
+  const rows=codes.map((c,i)=>`
+    <tr>
+      <td><b>Врата №${i+1}</b></td>
+      <td>${c?codeToGlyphName.get(c):"—"}</td>
+      <td>${c?(codeToSyllables.get(c)||[]).join(", "):"—"}</td>
+    </tr>`).join("");
 
-  document.getElementById("gatesTable").innerHTML =
-    `<table>
-      <thead>
-        <tr><th>Врата</th><th>Тэттраглиф</th><th>Слоги</th></tr>
-      </thead>
+  gatesTable.innerHTML=`
+    <table>
+      <thead><tr><th>Врата</th><th>Тэттраглиф</th><th>Слоги</th></tr></thead>
       <tbody>${rows}</tbody>
     </table>`;
 }
 
 /* =========================
-   TOAST
+   TXT EXPORT
    ========================= */
-
-function showToast(id){
-  const t = document.getElementById(id);
-  t.classList.add("show");
-  setTimeout(() => t.classList.remove("show"), 1300);
-}
-
-/* =========================
-   TXT-ЭКСПОРТ (имя участника + таблица + имя печати)
-   ========================= */
-
-function buildResultsPayload(){
-  const nameText = document.getElementById("nameOut").textContent.trim();
-  if(!nameText || nameText === "Имя печати: —") return null;
-
-  const participantRaw = (document.getElementById("participantName").value || "").trim() || "участник";
-
-  const rows = [...document.querySelectorAll("#gatesTable tbody tr")].map(tr =>
-    [...tr.querySelectorAll("td")].map(td => td.textContent.trim())
-  );
-  const header = ["Врата","Тэттраглиф","Слоги"];
-  const tsv = [header, ...rows].map(r => r.join("\t")).join("\n");
-
-  const sealName = nameText.replace("Имя печати:", "").trim() || "печать";
-
-  return { nameText, participantRaw, tsv, sealName };
-}
 
 function downloadResultsTxt(){
-  const p = buildResultsPayload();
-  if(!p) return;
+  const name=nameOut.textContent.replace("Имя печати:","").trim();
+  if(!name||name==="—") return;
 
-  const safe = s => s
-    .replace(/\s+/g, "_")
-    .replace(/[^A-Za-z0-9_\-\u0400-\u04FF]+/g, "_")
-    .replace(/_+/g, "_")
-    .replace(/^_+|_+$/g, "");
+  const participant=participantName.value.trim()||"участник";
+  const safe=s=>s.replace(/\s+/g,"_").replace(/[^\w\u0400-\u04FF-]/g,"_");
 
-  const fileName = `${safe(p.participantRaw)}-${safe(p.sealName)}.txt`;
+  const rows=[...document.querySelectorAll("#gatesTable tbody tr")]
+    .map(tr=>[...tr.children].map(td=>td.textContent).join("\t")).join("\n");
 
-  const content =
-`Практик: ${p.participantRaw}
-${p.nameText}
+  const text=`Практик: ${participant}
+Имя печати: ${name}
 
-${p.tsv}
+Врата\tТэттраглиф\tСлоги
+${rows}
 `;
 
-  const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
-  const url  = URL.createObjectURL(blob);
-
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = fileName;
-  document.body.appendChild(a);
+  const blob=new Blob([text],{type:"text/plain;charset=utf-8"});
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(blob);
+  a.download=`${safe(participant)}-${safe(name)}.txt`;
   a.click();
-  a.remove();
-
-  URL.revokeObjectURL(url);
+  URL.revokeObjectURL(a.href);
   showToast("downloadToast");
 }
 
 /* =========================
-   OUTPUT RESET
-   ========================= */
-
-function resetOutputs(msg){
-  document.getElementById("codeOut").textContent = "";
-  document.getElementById("nameOut").textContent = "";
-  document.getElementById("srcSyllables").innerHTML = "";
-  document.getElementById("workSyllables").innerHTML = "";
-  document.getElementById("workDesc").textContent = "";
-  document.getElementById("pickInfo").textContent = msg || "";
-  document.getElementById("downloadTxtBtn").disabled = true;
-}
-
-/* =========================
-   ОСНОВНОЙ РАСЧЁТ
+   MAIN
    ========================= */
 
 function calculateAll(){
-  const selects = Array.from(document.querySelectorAll("#selectors select"));
-  const total = selects.length;
-
-  const codes = [];
-  let incomplete = false;
-
-  for(const sel of selects){
-    const v = parseInt(sel.value, 10);
-    if(isNaN(v)){
-      incomplete = true;
-      codes.push(null);
-    } else {
-      codes.push(v);
-    }
+  const selects=[...document.querySelectorAll("#selectors select")];
+  const codes=[];
+  for(const s of selects){
+    if(!s.value){ resetOutputs("Выберите тэттраглифы для всех врат."); return; }
+    codes.push(+s.value);
   }
 
-  renderGatesTable(codes, total);
+  renderGatesTable(codes);
 
-  // Проверка дубликатов
-  const dupWarn = document.getElementById("dupWarn");
-  dupWarn.textContent = "";
+  const sum=codes.reduce((a,b)=>a+b,0);
+  const n=reduceCode(sum);
 
-  const counts = new Map();
-  codes.forEach(c => {
-    if(c == null) return;
-    const k = String(c);
-    counts.set(k, (counts.get(k) || 0) + 1);
-  });
+  codeOut.textContent=`Финальный числовой код: ${n}`;
+  codeExplain.textContent=`Путь расчёта: ${explainReduction(sum).join(" → ")}`;
 
-  let hasDup = false;
-  for(const [,cnt] of counts){
-    if(cnt > 1){ hasDup = true; break; }
-  }
+  const src=getSourceSyllables(codes);
+  renderSyllableLine("srcSyllables",src,[]);
 
-  if(hasDup){
-    dupWarn.textContent = "Нельзя выбирать одинаковые тэттраглифы для разных врат.";
-    resetOutputs("Обнаружены дубликаты выбора.");
-    return;
-  }
+  const {picked,pos,work,repeats}=pickEveryNthSyllable(n,src);
+  renderSyllableLine("workSyllables",work,pos);
 
-  if(incomplete){
-    resetOutputs(`Пожалуйста, выберите тэттраглиф для всех ${total} врат.`);
-    return;
-  }
+  workDesc.textContent=repeats
+    ? `Рабочая строка удлинена повтором ${repeats} раз(а), чтобы появились позиции ${n} и ${2*n}.`
+    : "Рабочая строка (удлинение не потребовалось).";
 
-  // Расчёт кода
-  const sum = codes.reduce((a,b) => a + (b || 0), 0);
-  const n = reduceCode(sum);
+  pickInfo.textContent=`Выбранные позиции: ${pos.join(", ")} (каждый ${n}-й слог).`;
 
-  // Слоги
-  const src = getSourceSyllables(codes);
-  renderSyllableLine("srcSyllables", src, []);
-
-  const { picked, positions, work, extended, repeats } = pickEveryNthSyllable(n, src);
-  const finalNameParts = postprocessName(picked);
-
-  document.getElementById("codeOut").textContent = `Финальный числовой код: ${n}`;
-
-  // workDesc improvement
-  document.getElementById("workDesc").textContent =
-    extended
-      ? `Рабочая строка (удлинена повтором исходной строки ${repeats} раз(а), чтобы появились минимум две позиции: ${n} и ${2*n})`
-      : "Рабочая строка (удлинение не потребовалось)";
-
-  renderSyllableLine("workSyllables", work, positions);
-
-  let info = positions.length
-    ? `Выбранные позиции: ${positions.join(", ")} (каждый ${n}-й слог).`
-    : `Нет доступных позиций, кратных ${n}, в рабочей строке.`;
-
-  if(positions.length >= 2){
-    info += " Набрано минимум два слога — формирование имени продолжается корректно даже при малом количестве исходных слогов.";
-  }
-
-  document.getElementById("pickInfo").textContent = info;
-
-  const finalName = finalNameParts.join(" ") || "—";
-  document.getElementById("nameOut").textContent = `Имя печати: ${finalName}`;
-
-  document.getElementById("downloadTxtBtn").disabled = (finalName === "—");
+  nameOut.textContent=`Имя печати: ${picked.join(" ")}`;
+  downloadTxtBtn.disabled=false;
 }
 
-/* Старт */
+function resetOutputs(msg){
+  codeOut.textContent="";
+  codeExplain.textContent="";
+  nameOut.textContent="";
+  srcSyllables.innerHTML="";
+  workSyllables.innerHTML="";
+  workDesc.textContent="";
+  pickInfo.textContent=msg||"";
+  downloadTxtBtn.disabled=true;
+}
+
+function showToast(id){
+  const t=document.getElementById(id);
+  t.classList.add("show");
+  setTimeout(()=>t.classList.remove("show"),1200);
+}
+
+/* INIT */
 renderSelectors();
 </script>
+
 </body>
 </html>
