@@ -41,7 +41,6 @@
     .card .desc { color: #444; font-size: 0.95em; margin-top: 6px; white-space: pre-line; }
     .card .note { color: #777; font-size: 0.9em; margin-top: 6px; }
 
-    /* Чуть лучше читается: подписи не “прилипают” к контролам */
     label { margin-right: 6px; }
   </style>
 </head>
@@ -63,7 +62,7 @@
 
   <div id="selectors"></div>
 
-  <!-- Ряд 1: действия (без “липнущих” подписей справа от кнопки) -->
+  <!-- Ряд 1: действия -->
   <div class="btn-row inline">
     <button onclick="calculateAll()">Рассчитать код и имя</button>
 
@@ -71,11 +70,10 @@
     <span id="downloadToast" class="toast">Скачано</span>
   </div>
 
-  <!-- Ряд 2: имя практика отдельной строкой -->
+  <!-- Ряд 2: имя практика -->
   <div class="btn-row inline" style="margin-top:6px;">
     <label for="participantName" class="muted">Имя практика:</label>
     <input id="participantName" type="text" placeholder="Введите имя" style="min-width:240px;">
-    <div class="muted" style="margin-left:6px;">(используется для имени файла)</div>
   </div>
 
   <div id="dupWarn" class="error"></div>
@@ -96,7 +94,7 @@
   <div id="workSyllables" class="mono"></div>
   <div id="pickInfo" class="muted"></div>
 
-  <div class="label">Тэттрачастицы имени:</div>
+  <div class="label" id="particlesLabel">Тэттрачастицы имени:</div>
   <div id="particlesOut" class="particles-grid"></div>
   <div id="particlesErr" class="muted error"></div>
 
@@ -143,6 +141,28 @@ const glyphs = [
 
 const codeToGlyphName = new Map(glyphs.map(([n,c])=>[c,n]));
 const codeToSyllables = new Map(glyphs.map(([n,c,s])=>[c,s]));
+
+/* =========================
+   SMALL UTILS
+   ========================= */
+function uniquePreserveOrder(arr){
+  const seen = new Set();
+  const out = [];
+  for(const x of arr){
+    const key = String(x);
+    if(!seen.has(key)){
+      seen.add(key);
+      out.push(x);
+    }
+  }
+  return out;
+}
+
+function setParticlesLabel(count){
+  const el = document.getElementById("particlesLabel");
+  if(!el) return;
+  el.textContent = (count === 1) ? "Тэттрачастица имени:" : "Тэттрачастицы имени:";
+}
 
 /* =========================
    RENDER SELECTORS (cards)
@@ -233,9 +253,6 @@ function updateOptionLocks(){
       o.disabled = selected.includes(o.value) && o.value!==sel.value;
     });
   });
-
-  // при смене выбора — можно оставить результаты, но я намеренно не сбрасываю автоматически
-  // чтобы не раздражать пользователя. Если захотите — добавим авто-сброс.
 }
 
 function getSourceSyllables(codes){
@@ -295,7 +312,7 @@ function renderGatesTable(codes){
 }
 
 /* =========================
-   PARTICLES CARDS
+   PARTICLES CARDS (dedupe)
    ========================= */
 function renderParticlesCards(syllables){
   const box = document.getElementById("particlesOut");
@@ -303,12 +320,16 @@ function renderParticlesCards(syllables){
   if(!box) return;
 
   if(err) err.textContent = "";
-  if(!syllables || !syllables.length){
+
+  const uniq = uniquePreserveOrder((syllables || []).filter(Boolean));
+  setParticlesLabel(uniq.length);
+
+  if(uniq.length === 0){
     box.innerHTML = "";
     return;
   }
 
-  box.innerHTML = syllables.map(s => {
+  box.innerHTML = uniq.map(s => {
     const p = particlesMap[s];
     return p
       ? `<div class="card">
@@ -324,7 +345,7 @@ function renderParticlesCards(syllables){
 }
 
 /* =========================
-   TXT EXPORT (имя практика + таблица + частицы)
+   TXT EXPORT (dedupe in particles)
    ========================= */
 function buildResultsPayload(){
   const nameText = nameOut.textContent.trim();
@@ -339,14 +360,16 @@ function buildResultsPayload(){
   const header = ["Врата","Тэттраглиф","Слоги"];
   const tsv = [header, ...rows].map(r => r.join("\t")).join("\n");
 
-  const syllables = sealName.split(/\s+/).filter(Boolean);
-  const particlesLines = syllables.map(s => {
+  const syllablesRaw = sealName.split(/\s+/).filter(Boolean);
+  const syllablesUniq = uniquePreserveOrder(syllablesRaw);
+
+  const particlesLines = syllablesUniq.map(s => {
     const d = particlesMap[s];
     const desc = d?.desc ? d.desc.trim() : "(нет описания)";
     return `${s} → ${desc}`;
   }).join("\n");
 
-  return { practitioner, sealName, nameText, tsv, particlesLines };
+  return { practitioner, sealName, nameText, tsv, particlesLines, particlesCount: syllablesUniq.length };
 }
 
 function downloadResultsTxt(){
@@ -361,13 +384,15 @@ function downloadResultsTxt(){
 
   const fileName = `${safe(p.practitioner)}-${safe(p.sealName)}.txt`;
 
+  const particlesHeader = (p.particlesCount === 1) ? "Тэттрачастица имени:" : "Тэттрачастицы имени:";
+
   const content =
 `Практик: ${p.practitioner}
 ${p.nameText}
 
 ${p.tsv}
 
-Тэттрачастицы имени:
+${particlesHeader}
 ${p.particlesLines}
 `;
 
@@ -401,6 +426,8 @@ function resetOutputs(msg){
   if(po) po.innerHTML="";
   if(pe) pe.textContent="";
 
+  setParticlesLabel(0);
+
   downloadTxtBtn.disabled=true;
 }
 
@@ -417,7 +444,7 @@ function calculateAll(){
   const selects=[...document.querySelectorAll("#selectors select")];
   const codes=[];
 
-  // дубликаты (чтобы поведение было как раньше)
+  // дубликаты
   const counts = new Map();
 
   for(const s of selects){
