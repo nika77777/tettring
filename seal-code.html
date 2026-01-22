@@ -296,7 +296,7 @@ function calculateAll(){
   const n=reduceCode(sum);
 
   codeOut.textContent=`Финальный числовой код: ${n}`;
-  codeExplain.textContent=`Путь расчёта: ${explainReduction(sum).join(" → ")}`;
+  codeExplain.textContent=`Сумма кодов выбранных тэттраглифов: ${explainReduction(sum).join(" → ")}`;
 
   const src=getSourceSyllables(codes);
   renderSyllableLine("srcSyllables",src,[]);
