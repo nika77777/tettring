@@ -267,30 +267,46 @@ function renderSyllableLine(id,arr,picks){
 }
 
 /* =========================
-   BUGFIX: extend until >= n and 2n exist
+   FIX: имя печати не длиннее n
+   - выбираем каждый n-й слог, но не более n раз
+   - удлиняем строку ТОЛЬКО если выбрано < 2 слогов
+   - если выбрано >=2, но < n — останавливаемся
    ========================= */
-function pickEveryNthSyllable(n,src){
+function pickEveryNthSyllable(n, src){
   if(!Array.isArray(src) || src.length===0 || !Number.isFinite(n) || n<=0){
     return {picked:[], pos:[], work:[], repeats:0};
   }
 
-  let work=[...src], repeats=0;
+  let work = [...src];
+  let repeats = 0;
 
-  // Нужно минимум две позиции: n и 2n => floor(work.length / n) >= 2
-  while(Math.floor(work.length/n)<2 && repeats<50){
-    work=work.concat(src);
-    repeats++;
-  }
+  while(true){
+    const k = Math.floor(work.length / n); // сколько позиций n,2n,3n... есть в текущей строке
+    const take = Math.min(n, k);           // но не более n слогов по правилу
 
-  const picked=[], pos=[];
-  for(let k=1;;k++){
-    const p=n*k;
-    if(p<=work.length){
+    const picked = [];
+    const pos = [];
+
+    for(let i = 1; i <= take; i++){
+      const p = n * i;
       picked.push(work[p-1]);
       pos.push(p);
-    } else break;
+    }
+
+    // Если уже есть минимум 2 слога — по правилам на этом всё.
+    // Даже если picked.length < n (строка короткая), мы НЕ удлиняем.
+    if(picked.length >= 2){
+      return {picked, pos, work, repeats};
+    }
+
+    // Иначе (0 или 1 слог) — удлиняем и пробуем снова
+    if(repeats >= 50){
+      return {picked, pos, work, repeats};
+    }
+
+    work = work.concat(src);
+    repeats++;
   }
-  return {picked,pos,work,repeats};
 }
 
 /* =========================
@@ -485,7 +501,7 @@ function calculateAll(){
   renderSyllableLine("workSyllables", work, pos);
 
   workDesc.textContent = repeats
-    ? `Рабочая строка удлинена повтором исходной строки ${repeats} раз(а), чтобы появились позиции ${n} и ${2*n}.`
+    ? `Рабочая строка удлинена повтором исходной строки ${repeats} раз(а), потому что после выбора каждого ${n}-го слога получилось меньше 2 слогов.`
     : "Рабочая строка (удлинение не потребовалось).";
 
   pickInfo.textContent = `Выбранные позиции: ${pos.join(", ")} (каждый ${n}-й слог).`;
