@@ -66,7 +66,7 @@
       font-size: 0.92rem;
       color: #4e3e36;
     }
-    .controls { margin-top: 22px; display: grid; grid-template-columns: minmax(220px, 1fr) repeat(4, auto); gap: 12px; align-items: center; }
+    .controls { display: grid; grid-template-columns: minmax(220px, 1fr) repeat(4, auto); gap: 12px; align-items: center; }
     .field { display: flex; flex-direction: column; gap: 7px; }
     .field-label { font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
     input, select, button { font: inherit; }
@@ -150,17 +150,10 @@
 <body>
   <main class="shell">
     <section class="hero">
-      <h1>Тэттра-калькулятор 7 Врат</h1>
-      <p class="hero-subtitle">Версия собрана по логике <span class="mono">seal-code.html</span> и адаптирована под новую схему из семи Врат: шесть стихийных каналов и один Главный Тэттраглиф.</p>
-      <div class="hero-meta">
-        <span class="chip">7 фиксированных Врат</span>
-        <span class="chip">Защита от повторяющихся тэттраглифов</span>
-        <span class="chip">Код, имя печати и тэттрачастицы</span>
-      </div>
       <div class="controls">
         <div class="field">
           <label class="field-label" for="participantName">Имя практика</label>
-          <input id="participantName" type="text" placeholder="Например, Вероника" />
+          <input id="participantName" type="text" placeholder="Например, Анна" />
         </div>
         <button class="primary" id="calculateBtn" type="button">Рассчитать</button>
         <button class="secondary" id="copyBtn" type="button" disabled>Скопировать</button>
