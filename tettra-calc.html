@@ -155,9 +155,13 @@
     .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; line-height: 1.9; word-break: break-word; }
     .syll { display: inline-block; margin-right: 8px; margin-bottom: 7px; padding: 2px 0; }
     .syll.pick { padding: 2px 8px; border-radius: 999px; background: rgba(212, 166, 58, 0.18); color: var(--text); box-shadow: inset 0 -1px 0 rgba(212, 166, 58, 0.38); font-weight: 700; }
+    .action-controls { margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--line); }
     .particles-grid { margin-top: 16px; display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; }
     .particle-card { padding: 16px; border-radius: 14px; background: rgba(255, 255, 255, 0.9); border: 1px solid var(--line); }
+    .particle-image { display: block; width: 100%; aspect-ratio: 1 / 1; object-fit: contain; margin-bottom: 12px; border-radius: 10px; background: var(--surface-soft); }
     .particle-title { font-size: 1.04rem; font-weight: 700; margin-bottom: 8px; color: var(--text-soft); }
+    .particle-desc { margin: 0; }
+    .particle-error { margin-top: 12px; }
     .footer-note { margin-top: 14px; font-size: 0.92rem; color: var(--muted); }
     @media (max-width: 980px) { .layout { grid-template-columns: 1fr; } }
     @media (max-width: 720px) {
@@ -182,12 +186,6 @@
             <p class="hero-subtitle">Инструмент для расчёта числового кода и имени печати через семь Врат.</p>
           </div>
         </div>
-        <div class="controls">
-          <button class="primary" id="calculateBtn" type="button">Рассчитать печать</button>
-          <button class="secondary" id="copyBtn" type="button" disabled>Скопировать</button>
-          <button class="secondary" id="downloadBtn" type="button" disabled>Скачать .txt</button>
-          <button class="ghost" id="resetBtn" type="button">Сбросить</button>
-        </div>
       </div>
     </section>
 
@@ -199,6 +197,12 @@
         <div class="field practitioner-field">
           <label class="field-label" for="participantName">Имя практика (необязательно)</label>
           <input id="participantName" type="text" placeholder="Например, Анна" />
+        </div>
+        <div class="controls action-controls">
+          <button class="primary" id="calculateBtn" type="button">Рассчитать печать</button>
+          <button class="secondary" id="copyBtn" type="button" disabled>Скопировать</button>
+          <button class="secondary" id="downloadBtn" type="button" disabled>Скачать .txt</button>
+          <button class="ghost" id="resetBtn" type="button">Сбросить</button>
         </div>
       </div>
 
@@ -253,6 +257,7 @@
     <section class="panel" style="margin-top: 18px;">
       <h2>Тэттрачастицы имени</h2>
       <p class="muted">Карточки собираются по слогам имени печати. Повторяющиеся частицы показываются один раз.</p>
+      <div id="particlesErr" class="muted particle-error" aria-live="polite"></div>
       <div id="particlesOut" class="particles-grid"></div>
     </section>
   </main>
@@ -282,46 +287,9 @@
       { name: "Эль Су-Ни-Я", code: 20, syllables: ["Су", "Ни", "Я"] },
       { name: "Эль Ра", code: 21, syllables: ["Эль", "Ра"] }
     ];
-    const particlesMap = {
-      "Аму": "Зеркало обновления / Зеркало перехода",
-      "Ар": "Потенциал непроявленных родовых каналов",
-      "Ата": "Наработки прошлого опыта / Наработки прошлых жизней",
-      "Ви": "Осознавание своего пути / Чёткое видение процесса от начала до конца",
-      "Дам": "Активация родовых каналов / Наработка родовых связей и родового энергобаланса",
-      "Дар": "Пространство благосостояния / Пространство внутреннего покоя",
-      "Инь": "Опора / Центр энергетических стихий / Найти опору внутри себя",
-      "Ио": "Защитная сфера / Защитное пространство",
-      "Кам": "Ресурс для получения результата",
-      "Кар": "Потенциал пути / Смысл и осознанность пути",
-      "Ке": "Я начинаю свой путь / Толчок / Мотивация / Энергоимпульс",
-      "Лар": "Единство родового канала",
-      "Ле": "Внутренние откровения души / Погружение внутрь себя / Активация энергоимпульса",
-      "Мана": "Переход энергии прошлого потенциала в потенциал будущего / Энергетический транзит прошлого в будущее",
-      "Мар": "Переход из непроявленного в проявленное / Пространство действия",
-      "Муд": "Очищение пути / Ясность видения",
-      "Мун": "Защита внутреннего пространства",
-      "Нар": "Точка сборки / Фиксация / Концентрация времени / Наполнение задачи временем",
-      "Нере": "Непроявленная энергия внутреннего потенциала",
-      "Ни": "Я собираю, отображаю своё время",
-      "О": "Трансформация / Линия судьбы / Завершение цикла и переход на новый уровень осознавания",
-      "Ок": "Канал восстановления",
-      "Ошта": "Выбор пути / Вектор направления",
-      "Прай": "Основа, базис пути / Я начинаю свой путь с опорой на внутреннюю целостность",
-      "Ра": "Проявленный свет / Проведение",
-      "Рам": "Осознание теневой стороны / Принятие своей теневой стороны",
-      "Рат": "Выход из петли времени",
-      "Рэ": "Открытие энергии",
-      "Су": "Огненный луч / Мировая воля / Проявленная энергия действия",
-      "Та": "Энергия непроявленного потенциала",
-      "Тан": "Открытие нового пути / Новые возможности / Новые дороги",
-      "Тар": "Проявленная энергия в будущем",
-      "Улос": "Отображение реальности",
-      "Хот": "Потенциал пути / Смысл пути",
-      "Шах": "Отображение зеркала души",
-      "Эль": "Божественная энергия / Внутренний центр / Благодать / Пространство благодарения",
-      "Эн": "Системность / Устойчивость",
-      "Я": "Отображение внутреннего храма"
-    };
+    const PARTICLES_FALLBACK = "Данные тэттрачастиц не найдены или не загружены.";
+    let particlesMap = {};
+    let particlesLoaded = false;
     const gates = [
       { theme: "earth", title: "Врата №1: Земля", energy: "Зерно-Род", mind: "Замысел" },
       { theme: "fire", title: "Врата №2: Огонь", energy: "Вдохновение", mind: "Воля" },
@@ -342,10 +310,48 @@
     const workDesc = document.getElementById("workDesc");
     const workSyllables = document.getElementById("workSyllables");
     const pickInfo = document.getElementById("pickInfo");
+    const particlesErr = document.getElementById("particlesErr");
     const particlesOut = document.getElementById("particlesOut");
     const statusText = document.getElementById("statusText");
     const copyBtn = document.getElementById("copyBtn");
     const downloadBtn = document.getElementById("downloadBtn");
+
+    fetch("particles.json")
+      .then((response) => {
+        if (!response.ok) throw new Error("particles.json not found");
+        return response.json();
+      })
+      .then((data) => {
+        particlesMap = data || {};
+        particlesLoaded = true;
+      })
+      .catch(() => {
+        particlesMap = {};
+        particlesLoaded = false;
+        if (particlesErr) particlesErr.textContent = PARTICLES_FALLBACK;
+      });
+
+    function escapeHtml(value) {
+      return String(value ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+    }
+
+    function getParticleData(syllable) {
+      return particlesMap && particlesMap[syllable] ? particlesMap[syllable] : null;
+    }
+
+    function getParticleDescription(syllable) {
+      const particle = getParticleData(syllable);
+      return particle && particle.desc ? particle.desc : PARTICLES_FALLBACK;
+    }
+
+    function setParticlesError(message = "") {
+      if (particlesErr) particlesErr.textContent = message;
+    }
 
     function renderGateCards() {
       gatesContainer.innerHTML = "";
@@ -476,12 +482,38 @@
 
     function renderParticles(syllables) {
       const unique = uniquePreserveOrder(syllables.filter(Boolean));
-      particlesOut.innerHTML = unique.map((syllable) => `
-        <article class="particle-card">
-          <div class="particle-title">${syllable}</div>
-          <div class="muted">${particlesMap[syllable] || "Описание для этой частицы пока не найдено."}</div>
-        </article>
-      `).join("");
+      particlesOut.innerHTML = "";
+      setParticlesError("");
+      if (!unique.length) return;
+      if (!particlesLoaded || !Object.keys(particlesMap).length) {
+        setParticlesError(PARTICLES_FALLBACK);
+        return;
+      }
+
+      let missingData = false;
+      const cards = unique.map((syllable) => {
+        const particle = getParticleData(syllable);
+        if (!particle) {
+          missingData = true;
+          return "";
+        }
+        const title = particle.title || syllable;
+        const description = particle.desc || PARTICLES_FALLBACK;
+        const image = particle.img
+          ? `<img class="particle-image" src="${escapeHtml(particle.img)}" alt="${escapeHtml(title)}" loading="lazy" onerror="this.remove(); document.getElementById('particlesErr').textContent='${PARTICLES_FALLBACK}';">`
+          : "";
+        if (!particle.img || !particle.desc) missingData = true;
+        return `
+          <article class="particle-card">
+            ${image}
+            <div class="particle-title">${escapeHtml(title)}</div>
+            <p class="particle-desc muted">${escapeHtml(description)}</p>
+          </article>
+        `;
+      }).filter(Boolean);
+
+      particlesOut.innerHTML = cards.join("");
+      if (!cards.length || missingData) setParticlesError(PARTICLES_FALLBACK);
     }
 
     function resetOutputs(message) {
@@ -493,6 +525,7 @@
       workDesc.textContent = "Рабочая строка появится после расчёта.";
       workSyllables.textContent = "";
       particlesOut.innerHTML = "";
+      setParticlesError("");
       copyBtn.disabled = true;
       downloadBtn.disabled = true;
     }
@@ -513,7 +546,7 @@
       });
       const table = [["Врата", "Тэттраглиф", "Код", "Слоги"], ...rows].map((row) => row.join("\t")).join("\n");
       const uniqueParticles = uniquePreserveOrder(sealName.split(/\s+/).filter(Boolean));
-      const particles = uniqueParticles.map((syllable) => `${syllable} → ${particlesMap[syllable] || "Описание для этой частицы пока не найдено."}`).join("\n");
+      const particles = uniqueParticles.map((syllable) => `${syllable} → ${getParticleDescription(syllable)}`).join("\n");
       return { practitioner, sealName, table, particles, code: codeOut.textContent.trim(), explanation: codeExplain.textContent.trim() };
     }
 
